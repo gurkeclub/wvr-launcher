@@ -118,13 +118,11 @@ impl Win {
 
     fn start(&self) {
         let config_path = self.model.config.path.join("config.ron");
-        Command::new(
-            "wvr",
-        )
-        .arg("-c")
-        .arg(config_path.to_str().unwrap())
-        .output()
-        .expect("failed to execute process");
+        Command::new("wvr")
+            .arg("-c")
+            .arg(config_path.to_str().unwrap())
+            .output()
+            .expect("failed to execute process");
     }
 }
 
@@ -363,7 +361,7 @@ impl Widget for Win {
         let window = gtk::Window::new(WindowType::Toplevel);
         let window_container = gtk::Box::new(Vertical, 16);
 
-        window.set_title("VBoij config");
+        window.set_title("wvr launcher");
         window.set_border_width(10);
         window.set_position(gtk::WindowPosition::Center);
         window.set_default_size(350, 70);
