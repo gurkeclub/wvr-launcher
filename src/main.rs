@@ -1,14 +1,12 @@
 use std::collections::HashMap;
-use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
-use std::str::FromStr;
 
 use anyhow::Result;
-use clap::{App, Arg};
 use uuid::Uuid;
+
 
 use gtk::prelude::NotebookExtManual;
 use gtk::Orientation::{Horizontal, Vertical};
@@ -448,103 +446,27 @@ impl Widget for Win {
     }
 }
 
-fn get_config() -> Result<ProjectConfig> {
+fn get_config() -> Result<Option<ProjectConfig>> {
     let wvr_data_path = wvr_data::get_data_path();
     let libs_path = wvr_data::get_libs_path();
     let filters_path = wvr_data::get_filters_path();
 
-    if !wvr_data_path.exists() {
-        println!(
-            "Warning: The default path for the data directory which contains wvr's projects does not exist, creating it at {:?}",
-            &wvr_data_path
-        );
-        fs::create_dir_all(&wvr_data_path).unwrap();
-    }
 
-    if !libs_path.exists() {
-        println!(
-            "Warning: The default path for the glsl libraries does not exist, creating it at {:?}",
-            libs_path.to_str()
-        );
-        fs::create_dir_all(&libs_path).unwrap();
-    }
-
-    if !filters_path.exists() {
-        println!(
-            "Warning: The default path for the filters folder does not exist, creating it at {:?}",
-            filters_path.to_str()
-        );
-        fs::create_dir_all(&filters_path).unwrap();
-    }
-
-    let matches = App::new("VBoij")
-        .version("0.0.1")
-        .author("Gurke.Club <contact@gurke.club>")
-        .about("A VJ-focused image processing framework")
-        .arg(
-            Arg::with_name("config")
-                .short("c")
-                .long("config")
-                .value_name("FILE")
-                .help("Allows loading a project outside of the default project path")
-                .required(false)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("project_name")
-                .help("Sets the input file to use")
-                .required(false)
-                .index(1),
-        )
-        .arg(
-            Arg::with_name("shadertoy")
-                .short("s")
-                .long("shadertoy")
-                .value_name("URL")
-                .help("Allows import of a shadertoy based project")
-                .required(false)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("shadertoy-key")
-                .short("k")
-                .long("shadertoy-key")
-                .value_name("KEY")
-                .help("Provides the api key for shadertoy import")
-                .required(false)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("new")
-                .short("n")
-                .long("new")
-                .value_name("NAME")
-                .help("Allows creation of a default project")
-                .required(false)
-                .takes_value(true),
-        )
-        .get_matches();
-
-    let config_path = if let Some(config_path) = matches.value_of("config") {
-        Some(PathBuf::from_str(config_path).unwrap())
-    } else if let Some(project_name) = matches.value_of("project_name") {
-        Some(
-            wvr_data_path
-                .join("projects")
-                .join(project_name)
-                .join("config.ron"),
-        )
-    } else if let Some(shadertoy_url) = matches.value_of("shadertoy") {
-        wvr_shadertoy::create_project_from_shadertoy_url(
-            wvr_data_path.as_path(),
-            shadertoy_url,
-            matches.value_of("shadertoy-key").unwrap(),
-        )
+    let config_path;
+    let projects_path = if cfg!(target_os = "windows") {
+        wvr_data_path.join("projects").to_str().unwrap().replace('/', "\\")
     } else {
-        None
+        wvr_data_path.join("projects").to_str().unwrap().to_owned()
     };
 
-    let config_path = config_path.unwrap();
+    println!("{:}", &projects_path);
+        match tinyfiledialogs::open_file_dialog("Open", projects_path.as_str(), None) {
+            Some(file) => config_path = PathBuf::from(file),
+            None => {return Ok(None);},
+        }
+    
+
+
 
     let project_path = config_path.parent().unwrap().to_owned();
     let mut config: ProjectConfig = if let Ok(file) = File::open(&config_path) {
@@ -562,13 +484,15 @@ fn get_config() -> Result<ProjectConfig> {
         config.libs_path = libs_path;
     }
 
-    Ok(config)
+    Ok(Some(config))
 }
 
 pub fn main() -> Result<()> {
     let config = get_config()?;
 
-    Win::run(config).expect("Win::run failed");
+    if let Some(config) = config {
+        Win::run(config).expect("Win::run failed");
+    }
 
     Ok(())
 }

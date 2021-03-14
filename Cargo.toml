@@ -7,7 +7,6 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0"
 ron = "0.6"
-clap = "*"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 glib = "0.10"
 gtk = {version = "*", features = ["v3_16"]}
@@ -16,6 +15,6 @@ relm = "0.20"
 relm-derive = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
- 
+tinyfiledialogs = "3.0" 
+
 wvr-data = {git = "https://github.com/gurkeclub/wvr-data.git", branch="main"}
-wvr-shadertoy = {git = "https://github.com/gurkeclub/wvr-shadertoy.git", branch="main"}
