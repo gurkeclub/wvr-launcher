@@ -1,3 +1,5 @@
+#![windows_subsystem="windows"]
+
 use std::{collections::HashMap, str::FromStr};
 use std::fs::File;
 use std::io::Write;
