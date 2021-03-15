@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
@@ -17,6 +17,8 @@ use gtk::{
 
 use relm::{connect, Component, Relm, Update, Widget};
 use relm_derive::Msg;
+
+use nfd2::Response;
 
 use wvr_data::config::project_config::ProjectConfig;
 use wvr_data::config::project_config::{FilterConfig, InputConfig, Speed};
@@ -452,18 +454,19 @@ fn get_config() -> Result<Option<ProjectConfig>> {
     let filters_path = wvr_data::get_filters_path();
 
 
-    let config_path;
-    let projects_path = if cfg!(target_os = "windows") {
-        wvr_data_path.join("projects").to_str().unwrap().replace('/', "\\")
-    } else {
-        wvr_data_path.join("projects").to_str().unwrap().to_owned()
-    };
+    let mut config_path = None;
+    let projects_path = wvr_data_path.join("projects");
 
-    println!("{:}", &projects_path);
-        match tinyfiledialogs::open_file_dialog("Open", projects_path.as_str(), None) {
-            Some(file) => config_path = PathBuf::from(file),
-            None => {return Ok(None);},
+    while config_path.is_none() {
+        match nfd2::open_file_dialog(None, Some(&projects_path)).expect("oh no") {
+            Response::Okay(file_path) => config_path = Some(file_path),
+            Response::OkayMultiple(_) => (),
+            Response::Cancel => return Ok(None),
         }
+    }
+
+
+    let config_path = config_path.unwrap();
     
 
 
