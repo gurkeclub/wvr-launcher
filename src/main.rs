@@ -1,16 +1,15 @@
-#![windows_subsystem="windows"]
+#![windows_subsystem = "windows"]
 
-use std::{collections::HashMap, str::FromStr};
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
+use std::{collections::HashMap, str::FromStr};
 
 use anyhow::Result;
 use uuid::Uuid;
 
-
-use gtk::prelude::NotebookExtManual;
+use gtk::prelude::{NotebookExtManual, WidgetExtManual};
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
     Button, ButtonExt, ContainerExt, GtkWindowExt, Inhibit, Label, Notebook, WidgetExt, Window,
@@ -120,11 +119,16 @@ impl Win {
 
     fn start(&self) {
         let config_path = self.model.config.path.join("config.ron");
+
+        self.window.hide();
+
         Command::new("wvr")
             .arg("-c")
             .arg(config_path.to_str().unwrap())
             .output()
             .expect("failed to execute process");
+
+        self.window.show();
     }
 }
 
@@ -455,7 +459,6 @@ fn get_config() -> Result<Option<ProjectConfig>> {
     let libs_path = wvr_data::get_libs_path();
     let filters_path = wvr_data::get_filters_path();
 
-
     let mut config_path = None;
     let projects_path = wvr_data_path.join("projects");
 
@@ -467,11 +470,7 @@ fn get_config() -> Result<Option<ProjectConfig>> {
         }
     }
 
-
     let config_path = config_path.unwrap();
-    
-
-
 
     let project_path = config_path.parent().unwrap().to_owned();
     let mut config: ProjectConfig = if let Ok(file) = File::open(&config_path) {
@@ -493,10 +492,14 @@ fn get_config() -> Result<Option<ProjectConfig>> {
 }
 
 pub fn main() -> Result<()> {
-    let config = get_config()?;
+    loop {
+        let config = get_config()?;
 
-    if let Some(config) = config {
-        Win::run(config).expect("Win::run failed");
+        if let Some(config) = config {
+            Win::run(config).expect("Win::run failed");
+        } else {
+            break;
+        }
     }
 
     Ok(())
