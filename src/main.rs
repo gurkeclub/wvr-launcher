@@ -1,15 +1,15 @@
 #![windows_subsystem = "windows"]
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
-use std::{collections::HashMap, str::FromStr};
 
 use anyhow::Result;
 use uuid::Uuid;
 
-use gtk::prelude::{NotebookExtManual, WidgetExtManual};
+use gtk::prelude::NotebookExtManual;
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
     Button, ButtonExt, ContainerExt, GtkWindowExt, Inhibit, Label, Notebook, WidgetExt, Window,
@@ -65,6 +65,7 @@ pub enum Msg {
 }
 
 pub struct Model {
+    project_path: PathBuf,
     config: ProjectConfig,
 }
 
@@ -102,7 +103,7 @@ impl Win {
                 .insert(name.clone(), config.clone());
         }
 
-        let config_path = self.model.config.path.join("config.ron");
+        let config_path = self.model.project_path.join("config.ron");
         if let Ok(mut project_config_file) = std::fs::File::create(config_path) {
             project_config_file
                 .write_all(
@@ -118,7 +119,7 @@ impl Win {
     }
 
     fn start(&self) {
-        let config_path = self.model.config.path.join("config.ron");
+        let config_path = self.model.project_path.join("config.ron");
 
         self.window.hide();
 
@@ -134,11 +135,14 @@ impl Win {
 
 impl Update for Win {
     type Model = Model;
-    type ModelParam = ProjectConfig;
+    type ModelParam = (PathBuf, ProjectConfig);
     type Msg = Msg;
 
-    fn model(_: &Relm<Self>, config: ProjectConfig) -> Self::Model {
-        Model { config }
+    fn model(_: &Relm<Self>, project: (PathBuf, ProjectConfig)) -> Self::Model {
+        Model {
+            project_path: project.0,
+            config: project.1,
+        }
     }
 
     fn update(&mut self, event: Msg) {
@@ -454,10 +458,8 @@ impl Widget for Win {
     }
 }
 
-fn get_config() -> Result<Option<ProjectConfig>> {
+fn get_config() -> Result<Option<(PathBuf, ProjectConfig)>> {
     let wvr_data_path = wvr_data::get_data_path();
-    let libs_path = wvr_data::get_libs_path();
-    let filters_path = wvr_data::get_filters_path();
 
     let mut config_path = None;
     let projects_path = wvr_data_path.join("projects");
@@ -473,30 +475,21 @@ fn get_config() -> Result<Option<ProjectConfig>> {
     let config_path = config_path.unwrap();
 
     let project_path = config_path.parent().unwrap().to_owned();
-    let mut config: ProjectConfig = if let Ok(file) = File::open(&config_path) {
+    let config: ProjectConfig = if let Ok(file) = File::open(&config_path) {
         ron::de::from_reader::<File, ProjectConfig>(file).unwrap()
     } else {
         panic!("Could not find config file {:?}", project_path);
     };
 
-    config.path = project_path;
-
-    if config.filters_path.to_string_lossy().len() == 0 {
-        config.filters_path = filters_path;
-    }
-    if config.libs_path.to_string_lossy().len() == 0 {
-        config.libs_path = libs_path;
-    }
-
-    Ok(Some(config))
+    Ok(Some((project_path, config)))
 }
 
 pub fn main() -> Result<()> {
     loop {
-        let config = get_config()?;
+        let project = get_config()?;
 
-        if let Some(config) = config {
-            Win::run(config).expect("Win::run failed");
+        if let Some(project) = project {
+            Win::run(project).expect("Win::run failed");
         } else {
             break;
         }
