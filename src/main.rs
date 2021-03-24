@@ -87,16 +87,12 @@ impl Win {
 
         let config_path = self.model.project_path.join("config.ron");
         if let Ok(mut project_config_file) = std::fs::File::create(config_path) {
-            project_config_file
-                .write_all(
-                    &ron::ser::to_string_pretty(
-                        &self.model.config,
-                        ron::ser::PrettyConfig::default(),
-                    )
+            let config_as_bytes =
+                ron::ser::to_string_pretty(&self.model.config, ron::ser::PrettyConfig::default())
                     .unwrap()
-                    .into_bytes(),
-                )
-                .unwrap();
+                    .into_bytes();
+
+            project_config_file.write_all(&config_as_bytes).unwrap();
         }
     }
 
