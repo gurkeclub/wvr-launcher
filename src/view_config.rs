@@ -1,5 +1,8 @@
 use gtk::Orientation::{Horizontal, Vertical};
-use gtk::{Adjustment, ContainerExt, EditableSignals, Label, SpinButton, SpinButtonExt, Switch, SwitchExt, WidgetExt};
+use gtk::{
+    Adjustment, ContainerExt, EditableSignals, Label, SpinButton, SpinButtonExt, Switch, SwitchExt,
+    WidgetExt,
+};
 
 use relm::{connect, Relm};
 
@@ -7,7 +10,7 @@ use crate::Msg;
 
 use wvr_data::config::project_config::ViewConfig;
 
-pub fn build_view(relm: &Relm<crate::Win>, view_config: &ViewConfig) -> gtk::Box {
+pub fn build_view(relm: &Relm<crate::Win>, bpm: f64, view_config: &ViewConfig) -> gtk::Box {
     let view_config_container = gtk::Box::new(Vertical, 2);
     view_config_container.set_property_margin(4);
 
@@ -17,8 +20,17 @@ pub fn build_view(relm: &Relm<crate::Win>, view_config: &ViewConfig) -> gtk::Box
     let padding = gtk::Box::new(Horizontal, 0);
     padding.set_hexpand(true);
 
-    let bpm_spin_button = SpinButton::new(Some(&Adjustment::new(view_config.bpm as f64, 0.0, 300.0, 0.01, 1.0, 1.0)), 0.01, 2);
-    connect!(relm, bpm_spin_button, connect_changed(val), Some(Msg::SetBPM(val.get_value())));
+    let bpm_spin_button = SpinButton::new(
+        Some(&Adjustment::new(bpm, 0.0, 300.0, 0.01, 1.0, 1.0)),
+        0.01,
+        2,
+    );
+    connect!(
+        relm,
+        bpm_spin_button,
+        connect_changed(val),
+        Some(Msg::SetBPM(val.get_value()))
+    );
 
     bpm_row.add(&Label::new(Some("Bpm: ")));
     bpm_row.add(&padding);
@@ -30,8 +42,24 @@ pub fn build_view(relm: &Relm<crate::Win>, view_config: &ViewConfig) -> gtk::Box
     let padding = gtk::Box::new(Horizontal, 0);
     padding.set_hexpand(true);
 
-    let width_spin_button = SpinButton::new(Some(&Adjustment::new(view_config.width as f64, 0.0, 8192.0, 1.0, 10.0, 10.0)), 1.0, 0);
-    connect!(relm, width_spin_button, connect_changed(val), Some(Msg::SetWidth(val.get_value() as i64)));
+    let width_spin_button = SpinButton::new(
+        Some(&Adjustment::new(
+            view_config.width as f64,
+            0.0,
+            8192.0,
+            1.0,
+            10.0,
+            10.0,
+        )),
+        1.0,
+        0,
+    );
+    connect!(
+        relm,
+        width_spin_button,
+        connect_changed(val),
+        Some(Msg::SetWidth(val.get_value() as i64))
+    );
 
     width_row.add(&Label::new(Some("Width: ")));
     width_row.add(&padding);
@@ -43,8 +71,24 @@ pub fn build_view(relm: &Relm<crate::Win>, view_config: &ViewConfig) -> gtk::Box
     let padding = gtk::Box::new(Horizontal, 0);
     padding.set_hexpand(true);
 
-    let height_spin_button = SpinButton::new(Some(&Adjustment::new(view_config.height as f64, 0.0, 8192.0, 1.0, 10.0, 10.0)), 1.0, 0);
-    connect!(relm, height_spin_button, connect_changed(val), Some(Msg::SetHeight(val.get_value() as i64)));
+    let height_spin_button = SpinButton::new(
+        Some(&Adjustment::new(
+            view_config.height as f64,
+            0.0,
+            8192.0,
+            1.0,
+            10.0,
+            10.0,
+        )),
+        1.0,
+        0,
+    );
+    connect!(
+        relm,
+        height_spin_button,
+        connect_changed(val),
+        Some(Msg::SetHeight(val.get_value() as i64))
+    );
 
     height_row.add(&Label::new(Some("Height: ")));
     height_row.add(&padding);
@@ -58,7 +102,12 @@ pub fn build_view(relm: &Relm<crate::Win>, view_config: &ViewConfig) -> gtk::Box
 
     let dynamic_size_switch = Switch::new();
     dynamic_size_switch.set_state(view_config.dynamic);
-    connect!(relm, dynamic_size_switch, connect_property_active_notify(val), Some(Msg::SetDynamicResolution(val.get_state())));
+    connect!(
+        relm,
+        dynamic_size_switch,
+        connect_property_active_notify(val),
+        Some(Msg::SetDynamicResolution(val.get_state()))
+    );
 
     dynamic_size_row.add(&Label::new(Some("Dynamic Resolution: ")));
     dynamic_size_row.add(&padding);
@@ -72,7 +121,12 @@ pub fn build_view(relm: &Relm<crate::Win>, view_config: &ViewConfig) -> gtk::Box
 
     let vsync_switch = Switch::new();
     vsync_switch.set_state(view_config.vsync);
-    connect!(relm, vsync_switch, connect_property_active_notify(val), Some(Msg::SetVSync(val.get_state())));
+    connect!(
+        relm,
+        vsync_switch,
+        connect_property_active_notify(val),
+        Some(Msg::SetVSync(val.get_state()))
+    );
 
     vsync_row.add(&Label::new(Some("VSync: ")));
     vsync_row.add(&padding);
@@ -86,7 +140,12 @@ pub fn build_view(relm: &Relm<crate::Win>, view_config: &ViewConfig) -> gtk::Box
 
     let screenshot_switch = Switch::new();
     screenshot_switch.set_state(view_config.screenshot);
-    connect!(relm, screenshot_switch, connect_property_active_notify(val), Some(Msg::SetScreenshot(val.get_state())));
+    connect!(
+        relm,
+        screenshot_switch,
+        connect_property_active_notify(val),
+        Some(Msg::SetScreenshot(val.get_state()))
+    );
 
     screenshot_row.add(&Label::new(Some("Enable frame recording: ")));
     screenshot_row.add(&padding);
@@ -98,12 +157,33 @@ pub fn build_view(relm: &Relm<crate::Win>, view_config: &ViewConfig) -> gtk::Box
     let padding = gtk::Box::new(Horizontal, 0);
     padding.set_hexpand(true);
 
-    let target_fps_spin_button = SpinButton::new(Some(&Adjustment::new(view_config.target_fps as f64, 1.0, 240.0, 0.01, 1.0, 1.0)), 0.01, 2);
-    connect!(relm, target_fps_spin_button, connect_changed(val), Some(Msg::SetTargetFps(val.get_value() as f64)));
+    let target_fps_spin_button = SpinButton::new(
+        Some(&Adjustment::new(
+            view_config.target_fps as f64,
+            1.0,
+            240.0,
+            0.01,
+            1.0,
+            1.0,
+        )),
+        0.01,
+        2,
+    );
+    connect!(
+        relm,
+        target_fps_spin_button,
+        connect_changed(val),
+        Some(Msg::SetTargetFps(val.get_value() as f64))
+    );
 
     let locked_speed_switch = Switch::new();
     locked_speed_switch.set_state(view_config.locked_speed);
-    connect!(relm, locked_speed_switch, connect_property_active_notify(val), Some(Msg::SetDynamicResolution(val.get_state())));
+    connect!(
+        relm,
+        locked_speed_switch,
+        connect_property_active_notify(val),
+        Some(Msg::SetDynamicResolution(val.get_state()))
+    );
 
     locked_speed_row.add(&Label::new(Some("Lock Framerate: ")));
     locked_speed_row.add(&padding);

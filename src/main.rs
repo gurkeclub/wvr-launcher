@@ -95,14 +95,6 @@ impl Win {
                 .insert(name.clone(), config.clone());
         }
 
-        self.model.config.filters.clear();
-        for (name, config, _, _) in self.filter_config_widget_list.values() {
-            self.model
-                .config
-                .filters
-                .insert(name.clone(), config.clone());
-        }
-
         let config_path = self.model.project_path.join("config.ron");
         if let Ok(mut project_config_file) = std::fs::File::create(config_path) {
             project_config_file
@@ -149,7 +141,7 @@ impl Update for Win {
         println!("{:?}", event);
         match event {
             Msg::Quit => gtk::main_quit(),
-            Msg::SetBPM(bpm) => self.model.config.view.bpm = bpm as f32,
+            Msg::SetBPM(bpm) => self.model.config.bpm = bpm as f32,
             Msg::SetWidth(width) => self.model.config.view.width = width,
             Msg::SetHeight(height) => self.model.config.view.height = height,
             Msg::SetTargetFps(fps) => self.model.config.view.target_fps = fps as f32,
@@ -378,7 +370,8 @@ impl Widget for Win {
 
         let tabs_container = Notebook::new();
 
-        let view_config_widget = view_config::build_view(relm, &model.config.view);
+        let view_config_widget =
+            view_config::build_view(relm, model.config.bpm as f64, &model.config.view);
 
         let server_config_panel = server_config::build_view(relm, &model.config.server);
 
@@ -388,10 +381,11 @@ impl Widget for Win {
             &model.config.inputs,
         );
 
+        let filter_config_list = HashMap::new();
         let (filter_list_panel, filter_list_container) = filter_config::build_list_view(
             relm,
             &mut filter_config_widget_list,
-            &model.config.filters,
+            &filter_config_list,
         );
 
         let render_chain_panel = gtk::Box::new(Vertical, 0);

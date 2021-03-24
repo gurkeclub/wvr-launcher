@@ -932,8 +932,8 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "wvr-data"
-version = "0.1.1"
-source = "git+https://github.com/gurkeclub/wvr-data.git?branch=main#9a1e2deeed4d2747dbc96f653a475362b0b132ac"
+version = "0.1.2"
+source = "git+https://github.com/gurkeclub/wvr-data.git?branch=main#f9063f69fd7a78af89aff56a47004b6066b58b62"
 dependencies = [
  "anyhow",
  "clap",
