@@ -87,10 +87,9 @@ impl Win {
 
         let config_path = self.model.project_path.join("config.ron");
         if let Ok(mut project_config_file) = std::fs::File::create(config_path) {
-            let config_as_bytes =
-                ron::ser::to_string_pretty(&self.model.config, ron::ser::PrettyConfig::default())
-                    .unwrap()
-                    .into_bytes();
+            let config_as_bytes = serde_json::ser::to_string_pretty(&self.model.config)
+                .unwrap()
+                .into_bytes();
 
             project_config_file.write_all(&config_as_bytes).unwrap();
         }
@@ -401,7 +400,7 @@ fn get_config() -> Result<Option<(PathBuf, ProjectConfig)>> {
 
     let project_path = config_path.parent().unwrap().to_owned();
     let config: ProjectConfig = if let Ok(file) = File::open(&config_path) {
-        ron::de::from_reader::<File, ProjectConfig>(file).unwrap()
+        serde_json::from_reader::<File, ProjectConfig>(file).unwrap()
     } else {
         panic!("Could not find config file {:?}", project_path);
     };

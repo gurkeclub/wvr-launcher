@@ -6,15 +6,13 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
-ron = "0.6"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 glib = "0.10"
 gtk = {version = "*", features = ["v3_16"]}
 gdk = "0.13"
 relm = "0.20"
 relm-derive = "*"
-serde = { version = "*", features = ["derive"] }
-serde_json = "*"
+serde_json = "1.0"
 nfd2 = "0.2" 
 
 wvr-data = {git = "https://github.com/gurkeclub/wvr-data.git", branch="main"}

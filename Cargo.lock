@@ -954,8 +954,6 @@ dependencies = [
  "nfd2",
  "relm",
  "relm-derive",
- "ron",
- "serde",
  "serde_json",
  "uuid",
  "wvr-data",
