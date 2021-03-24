@@ -22,14 +22,12 @@ use relm_derive::Msg;
 use nfd2::Response;
 
 use wvr_data::config::project_config::ProjectConfig;
-use wvr_data::config::project_config::{FilterConfig, InputConfig, Speed};
+use wvr_data::config::project_config::{InputConfig, Speed};
 
-mod filter_config;
 mod input_config;
 mod server_config;
 mod view_config;
 
-use filter_config::FilterConfigView;
 use input_config::InputConfigView;
 
 #[derive(Msg, Debug)]
@@ -54,10 +52,6 @@ pub enum Msg {
     UpdateInputConfig(Uuid, String, InputConfig),
     RemoveInput(Uuid),
 
-    AddFilter,
-    UpdateFilterConfig(Uuid, String, FilterConfig),
-    RemoveFilter(Uuid),
-
     Quit,
     Save,
     Start,
@@ -77,10 +71,6 @@ pub struct Win {
     input_list_container: gtk::Box,
     input_config_widget_list:
         HashMap<Uuid, (String, InputConfig, Component<InputConfigView>, gtk::Box)>,
-
-    filter_list_container: gtk::Box,
-    filter_config_widget_list:
-        HashMap<Uuid, (String, FilterConfig, Component<FilterConfigView>, gtk::Box)>,
 
     relm: Relm<Self>,
 }
@@ -300,50 +290,6 @@ impl Update for Win {
                     *config = new_config;
                 }
             }
-
-            Msg::AddFilter => {
-                let filter_name = "My filter";
-
-                let filter_config = FilterConfig {
-                    path: None,
-                    inputs: Vec::new(),
-                    vertex_shader: Vec::new(),
-                    fragment_shader: Vec::new(),
-                    variables: HashMap::new(),
-                };
-
-                let (id, wrapper, filter_config_view) =
-                    filter_config::build_filter_config_row(&self.relm, filter_name, &filter_config);
-
-                self.filter_list_container.add(&wrapper);
-                wrapper.show_all();
-                self.filter_config_widget_list.insert(
-                    id,
-                    (
-                        filter_name.to_string(),
-                        filter_config,
-                        filter_config_view,
-                        wrapper,
-                    ),
-                );
-            }
-
-            Msg::RemoveFilter(id) => {
-                if let Some((_, _, _, filter_view_wrapper)) =
-                    self.filter_config_widget_list.get(&id)
-                {
-                    self.filter_list_container.remove(filter_view_wrapper);
-                }
-                self.filter_config_widget_list.remove(&id);
-            }
-            Msg::UpdateFilterConfig(id, new_name, new_config) => {
-                if let Some((ref mut name, ref mut config, _, _)) =
-                    self.filter_config_widget_list.get_mut(&id)
-                {
-                    *name = new_name;
-                    *config = new_config;
-                }
-            }
         }
     }
 }
@@ -357,7 +303,6 @@ impl Widget for Win {
 
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
         let mut input_config_widget_list = HashMap::new();
-        let mut filter_config_widget_list = HashMap::new();
 
         let model = model;
         let window = gtk::Window::new(WindowType::Toplevel);
@@ -381,13 +326,6 @@ impl Widget for Win {
             &model.config.inputs,
         );
 
-        let filter_config_list = HashMap::new();
-        let (filter_list_panel, filter_list_container) = filter_config::build_list_view(
-            relm,
-            &mut filter_config_widget_list,
-            &filter_config_list,
-        );
-
         let render_chain_panel = gtk::Box::new(Vertical, 0);
         // TODO
 
@@ -397,7 +335,6 @@ impl Widget for Win {
         tabs_container.append_page(&view_config_widget, Some(&Label::new(Some("View"))));
         tabs_container.append_page(&server_config_panel, Some(&Label::new(Some("Server"))));
         tabs_container.append_page(&input_list_panel, Some(&Label::new(Some("Inputs"))));
-        tabs_container.append_page(&filter_list_panel, Some(&Label::new(Some("Filters"))));
         tabs_container.append_page(&render_chain_panel, Some(&Label::new(Some("Render chain"))));
         tabs_container.append_page(&final_stage_panel, Some(&Label::new(Some("Final stage"))));
 
@@ -444,8 +381,6 @@ impl Widget for Win {
             input_list_container,
 
             input_config_widget_list,
-            filter_list_container,
-            filter_config_widget_list,
 
             relm: relm.clone(),
         }
