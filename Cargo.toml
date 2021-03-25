@@ -8,10 +8,10 @@ edition = "2018"
 anyhow = "1.0"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 glib = "0.10"
-gtk = {version = "*", features = ["v3_16"]}
+gtk = {version = "0.9", features = ["v3_16"]}
 gdk = "0.13"
-relm = "0.20"
-relm-derive = "*"
+relm = "0.21"
+relm-derive = "0.21"
 serde_json = "1.0"
 nfd2 = "0.2" 
 

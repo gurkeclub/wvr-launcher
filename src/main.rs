@@ -3,13 +3,14 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::Result;
 use uuid::Uuid;
 
 use gtk::prelude::NotebookExtManual;
+use gtk::prelude::WidgetExtManual;
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
     Button, ButtonExt, ContainerExt, GtkWindowExt, Inhibit, Label, Notebook, WidgetExt, Window,
@@ -76,7 +77,8 @@ pub struct Win {
 }
 
 impl Win {
-    fn save_config(&mut self) {
+    fn save_config(&mut self, project_config_file_path: &Path) {
+        println!("{:?}", project_config_file_path);
         self.model.config.inputs.clear();
         for (name, config, _, _) in self.input_config_widget_list.values() {
             self.model
@@ -85,7 +87,7 @@ impl Win {
                 .insert(name.clone(), config.clone());
         }
 
-        let config_path = self.model.project_path.join("config.ron");
+        let config_path = project_config_file_path;
         if let Ok(mut project_config_file) = std::fs::File::create(config_path) {
             let config_as_bytes = serde_json::ser::to_string_pretty(&self.model.config)
                 .unwrap()
@@ -95,8 +97,12 @@ impl Win {
         }
     }
 
-    fn start(&self) {
-        let config_path = self.model.project_path.join("config.ron");
+    fn load_config(&mut self, project_config_file_path: &Path) {}
+
+    fn start(&mut self) {
+        let config_path = self.model.project_path.join("config.tmp.json");
+
+        self.save_config(&config_path);
 
         self.window.hide();
 
@@ -125,7 +131,12 @@ impl Update for Win {
     fn update(&mut self, event: Msg) {
         println!("{:?}", event);
         match event {
-            Msg::Quit => gtk::main_quit(),
+            Msg::Quit => {
+                unsafe {
+                    self.window.destroy();
+                }
+                gtk::main_quit()
+            }
             Msg::SetBPM(bpm) => self.model.config.bpm = bpm as f32,
             Msg::SetWidth(width) => self.model.config.view.width = width,
             Msg::SetHeight(height) => self.model.config.view.height = height,
@@ -140,7 +151,7 @@ impl Update for Win {
             Msg::SetServerEnabled(enable) => self.model.config.server.enable = enable,
 
             Msg::Save => {
-                self.save_config();
+                self.save_config(&self.model.project_path.join("config.json"));
             }
             Msg::Start => {
                 self.start();
@@ -335,11 +346,6 @@ impl Widget for Win {
 
         let control_container = gtk::Box::new(Horizontal, 8);
 
-        let exit_button = Button::new();
-        exit_button.set_label("Exit");
-        exit_button.set_hexpand(true);
-        connect!(relm, exit_button, connect_clicked(_), Some(Msg::Quit));
-
         let save_button = Button::new();
         save_button.set_label("Save");
         save_button.set_hexpand(true);
@@ -350,7 +356,6 @@ impl Widget for Win {
         start_button.set_hexpand(true);
         connect!(relm, start_button, connect_clicked(_), Some(Msg::Start));
 
-        control_container.add(&exit_button);
         control_container.add(&save_button);
         control_container.add(&start_button);
 
@@ -409,14 +414,8 @@ fn get_config() -> Result<Option<(PathBuf, ProjectConfig)>> {
 }
 
 pub fn main() -> Result<()> {
-    loop {
-        let project = get_config()?;
-
-        if let Some(project) = project {
-            Win::run(project).expect("Win::run failed");
-        } else {
-            break;
-        }
+    if let Some(project) = get_config()? {
+        Win::run(project).expect("Win::run failed");
     }
 
     Ok(())
