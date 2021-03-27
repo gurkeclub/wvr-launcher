@@ -23,13 +23,15 @@ use relm_derive::Msg;
 use nfd2::Response;
 
 use wvr_data::config::project_config::ProjectConfig;
-use wvr_data::config::project_config::{InputConfig, Speed};
+use wvr_data::config::project_config::{BufferPrecision, InputConfig, RenderStageConfig, Speed};
 
 mod input_config;
 mod server_config;
+mod stage_config;
 mod view_config;
 
 use input_config::InputConfigView;
+use stage_config::RenderStageConfigView;
 
 #[derive(Msg, Debug)]
 pub enum Msg {
@@ -40,6 +42,7 @@ pub enum Msg {
     SetDynamicResolution(bool),
     SetVSync(bool),
     SetScreenshot(bool),
+    SetFullscreen(bool),
     SetLockedSpeed(bool),
 
     SetServerIp(String),
@@ -52,6 +55,10 @@ pub enum Msg {
     AddMidiInput,
     UpdateInputConfig(Uuid, String, InputConfig),
     RemoveInput(Uuid),
+
+    AddRenderStage,
+    UpdateRenderStageConfig(Uuid, String, RenderStageConfig),
+    RemoveRenderStage(Uuid),
 
     Quit,
     Save,
@@ -73,18 +80,35 @@ pub struct Win {
     input_config_widget_list:
         HashMap<Uuid, (String, InputConfig, Component<InputConfigView>, gtk::Box)>,
 
+    render_stage_config_list_container: gtk::Box,
+    render_stage_config_widget_list: HashMap<
+        Uuid,
+        (
+            String,
+            RenderStageConfig,
+            Component<RenderStageConfigView>,
+            gtk::Box,
+        ),
+    >,
+
     relm: Relm<Self>,
 }
 
 impl Win {
     fn save_config(&mut self, project_config_file_path: &Path) {
-        println!("{:?}", project_config_file_path);
+        println!("Saving to {:?}", project_config_file_path);
+
         self.model.config.inputs.clear();
         for (name, config, _, _) in self.input_config_widget_list.values() {
             self.model
                 .config
                 .inputs
                 .insert(name.clone(), config.clone());
+        }
+
+        self.model.config.render_chain.clear();
+        for (name, config, _, _) in self.render_stage_config_widget_list.values() {
+            self.model.config.render_chain.push(config.clone());
         }
 
         let config_path = project_config_file_path;
@@ -144,6 +168,7 @@ impl Update for Win {
             Msg::SetDynamicResolution(dynamic) => self.model.config.view.dynamic = dynamic,
             Msg::SetVSync(vsync) => self.model.config.view.vsync = vsync,
             Msg::SetScreenshot(screenshot) => self.model.config.view.screenshot = screenshot,
+            Msg::SetFullscreen(fullscreen) => self.model.config.view.fullscreen = fullscreen,
             Msg::SetLockedSpeed(locked_speed) => self.model.config.view.locked_speed = locked_speed,
 
             Msg::SetServerIp(ip) => self.model.config.server.ip = ip,
@@ -296,6 +321,53 @@ impl Update for Win {
                     *config = new_config;
                 }
             }
+
+            Msg::AddRenderStage => {
+                let render_stage_name = "My render stage";
+                let filter_name = "default_filter";
+
+                let render_stage_config = RenderStageConfig {
+                    name: render_stage_name.to_string(),
+                    filter: filter_name.to_string(),
+                    inputs: HashMap::new(),
+                    variables: HashMap::new(),
+                    precision: BufferPrecision::U8,
+                };
+
+                let (id, wrapper, render_stage_config_view) =
+                    stage_config::build_render_stage_config_row(&self.relm, &render_stage_config);
+
+                self.render_stage_config_list_container.add(&wrapper);
+                wrapper.show_all();
+                self.render_stage_config_widget_list.insert(
+                    id,
+                    (
+                        render_stage_name.to_string(),
+                        render_stage_config,
+                        render_stage_config_view,
+                        wrapper,
+                    ),
+                );
+            }
+
+            Msg::RemoveRenderStage(id) => {
+                if let Some((_, _, _, render_stage_config_view_wrapper)) =
+                    self.render_stage_config_widget_list.get(&id)
+                {
+                    self.render_stage_config_list_container
+                        .remove(render_stage_config_view_wrapper);
+                }
+                self.render_stage_config_widget_list.remove(&id);
+            }
+            Msg::UpdateRenderStageConfig(id, new_name, new_config) => {
+                if let Some((ref mut name, ref mut config, _, _)) =
+                    self.render_stage_config_widget_list.get_mut(&id)
+                {
+                    *name = new_name;
+                    *config = new_config;
+                }
+            }
+            _ => unimplemented!(),
         }
     }
 }
@@ -309,6 +381,7 @@ impl Widget for Win {
 
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
         let mut input_config_widget_list = HashMap::new();
+        let mut render_stage_config_widget_list = HashMap::new();
 
         let model = model;
         let window = gtk::Window::new(WindowType::Toplevel);
@@ -317,7 +390,7 @@ impl Widget for Win {
         window.set_title("wvr launcher");
         window.set_border_width(10);
         window.set_position(gtk::WindowPosition::Center);
-        window.set_default_size(350, 70);
+        window.set_default_size(960, 70);
 
         let tabs_container = Notebook::new();
 
@@ -332,8 +405,12 @@ impl Widget for Win {
             &model.config.inputs,
         );
 
-        let render_chain_panel = gtk::Box::new(Vertical, 0);
-        // TODO
+        let (render_stage_config_list_panel, render_stage_config_list_container) =
+            stage_config::build_list_view(
+                relm,
+                &mut render_stage_config_widget_list,
+                &model.config.render_chain,
+            );
 
         let final_stage_panel = gtk::Box::new(Vertical, 0);
         // TODO
@@ -341,7 +418,10 @@ impl Widget for Win {
         tabs_container.append_page(&view_config_widget, Some(&Label::new(Some("View"))));
         tabs_container.append_page(&server_config_panel, Some(&Label::new(Some("Server"))));
         tabs_container.append_page(&input_list_panel, Some(&Label::new(Some("Inputs"))));
-        tabs_container.append_page(&render_chain_panel, Some(&Label::new(Some("Render chain"))));
+        tabs_container.append_page(
+            &render_stage_config_list_panel,
+            Some(&Label::new(Some("Render chain"))),
+        );
         tabs_container.append_page(&final_stage_panel, Some(&Label::new(Some("Final stage"))));
 
         let control_container = gtk::Box::new(Horizontal, 8);
@@ -381,6 +461,9 @@ impl Widget for Win {
             input_list_container,
 
             input_config_widget_list,
+
+            render_stage_config_list_container,
+            render_stage_config_widget_list,
 
             relm: relm.clone(),
         }

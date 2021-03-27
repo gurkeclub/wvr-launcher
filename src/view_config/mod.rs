@@ -94,6 +94,25 @@ pub fn build_view(relm: &Relm<crate::Win>, bpm: f64, view_config: &ViewConfig) -
     height_row.add(&padding);
     height_row.add(&height_spin_button);
 
+    // Fullscreen activation row creation
+    let fullscreen_row = gtk::Box::new(Horizontal, 8);
+
+    let padding = gtk::Box::new(Horizontal, 0);
+    padding.set_hexpand(true);
+
+    let fullscreen_switch = Switch::new();
+    fullscreen_switch.set_state(view_config.fullscreen);
+    connect!(
+        relm,
+        fullscreen_switch,
+        connect_property_active_notify(val),
+        Some(Msg::SetFullscreen(val.get_state()))
+    );
+
+    fullscreen_row.add(&Label::new(Some("Enable fullscreen: ")));
+    fullscreen_row.add(&padding);
+    fullscreen_row.add(&fullscreen_switch);
+
     // Dynamic resolution row creation
     let dynamic_size_row = gtk::Box::new(Horizontal, 8);
 
@@ -195,6 +214,7 @@ pub fn build_view(relm: &Relm<crate::Win>, bpm: f64, view_config: &ViewConfig) -
     view_config_container.add(&height_row);
     view_config_container.add(&locked_speed_row);
 
+    view_config_container.add(&fullscreen_row);
     view_config_container.add(&dynamic_size_row);
     view_config_container.add(&vsync_row);
     view_config_container.add(&screenshot_row);
