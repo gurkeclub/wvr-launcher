@@ -74,7 +74,7 @@ pub fn build_cam_view(relm: &Relm<InputConfigView>, model: &InputConfigViewModel
         let resolution_row = gtk::Box::new(Horizontal, 8);
         resolution_row.set_property_margin(8);
 
-        let resolution_label = Label::new(Some("Path: "));
+        let resolution_label = Label::new(Some("Size: "));
         resolution_label.set_xalign(0.0);
         resolution_label.set_size_request(48, 0);
 

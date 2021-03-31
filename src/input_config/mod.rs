@@ -25,7 +25,7 @@ pub fn build_list_view(
     >,
     input_config_list: &HashMap<String, InputConfig>,
 ) -> (gtk::Box, gtk::Box) {
-    let input_list_panel = gtk::Box::new(Vertical, 4);
+    let input_list_panel = gtk::Box::new(Vertical, 2);
     input_list_panel.set_property_margin(4);
 
     let input_list_control_container = gtk::Box::new(Horizontal, 8);
@@ -116,7 +116,7 @@ pub fn build_input_config_row(
     input_config: &InputConfig,
 ) -> (Uuid, gtk::Box, Component<InputConfigView>) {
     let id = Uuid::new_v4();
-    let wrapper = gtk::Box::new(Horizontal, 4);
+    let wrapper = gtk::Box::new(Horizontal, 2);
     let (label_name, label_color) = match input_config {
         InputConfig::Cam { .. } => (
             "Camera",
@@ -171,7 +171,7 @@ pub fn build_input_config_row(
 
     wrapper.add(&row_label);
     let input_config_view = wrapper.add_widget::<InputConfigView>((
-        id.clone(),
+        id,
         input_name.to_string(),
         input_config.clone(),
         relm.clone(),

@@ -1,8 +1,10 @@
 #![windows_subsystem = "windows"]
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
+use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -17,7 +19,7 @@ use gtk::{
     WindowType,
 };
 
-use relm::{connect, Component, Relm, Update, Widget};
+use relm::{connect, Component, ContainerWidget, Relm, Update, Widget};
 use relm_derive::Msg;
 
 use nfd2::Response;
@@ -32,6 +34,16 @@ mod view_config;
 
 use input_config::InputConfigView;
 use stage_config::RenderStageConfigView;
+use stage_config::RenderStageConfigViewMsg;
+
+pub fn get_input_choice_list(config: &ProjectConfig) -> Vec<String> {
+    config
+        .inputs
+        .keys()
+        .map(String::clone)
+        .chain(config.render_chain.iter().map(|stage| stage.name.clone()))
+        .collect()
+}
 
 #[derive(Msg, Debug)]
 pub enum Msg {
@@ -57,7 +69,7 @@ pub enum Msg {
     RemoveInput(Uuid),
 
     AddRenderStage,
-    UpdateRenderStageConfig(Uuid, String, RenderStageConfig),
+    UpdateRenderStageConfig(Uuid, RenderStageConfig),
     RemoveRenderStage(Uuid),
 
     Quit,
@@ -84,12 +96,15 @@ pub struct Win {
     render_stage_config_widget_list: HashMap<
         Uuid,
         (
-            String,
             RenderStageConfig,
             Component<RenderStageConfigView>,
             gtk::Box,
         ),
     >,
+    render_stage_order: Vec<Uuid>,
+
+    final_stage_id: Uuid,
+    final_stage_widget: Component<RenderStageConfigView>,
 
     relm: Relm<Self>,
 }
@@ -97,19 +112,6 @@ pub struct Win {
 impl Win {
     fn save_config(&mut self, project_config_file_path: &Path) {
         println!("Saving to {:?}", project_config_file_path);
-
-        self.model.config.inputs.clear();
-        for (name, config, _, _) in self.input_config_widget_list.values() {
-            self.model
-                .config
-                .inputs
-                .insert(name.clone(), config.clone());
-        }
-
-        self.model.config.render_chain.clear();
-        for (name, config, _, _) in self.render_stage_config_widget_list.values() {
-            self.model.config.render_chain.push(config.clone());
-        }
 
         let config_path = project_config_file_path;
         if let Ok(mut project_config_file) = std::fs::File::create(config_path) {
@@ -120,8 +122,6 @@ impl Win {
             project_config_file.write_all(&config_as_bytes).unwrap();
         }
     }
-
-    fn load_config(&mut self, project_config_file_path: &Path) {}
 
     fn start(&mut self) {
         let config_path = self.model.project_path.join("config.tmp.json");
@@ -154,6 +154,13 @@ impl Update for Win {
 
     fn update(&mut self, event: Msg) {
         println!("{:?}", event);
+
+        let mut input_list_changed = false;
+        let mut render_chain_changed = false;
+
+        let input_choice_list: HashSet<String> =
+            HashSet::from_iter(get_input_choice_list(&self.model.config));
+
         match event {
             Msg::Quit => {
                 unsafe {
@@ -204,15 +211,10 @@ impl Update for Win {
 
                 self.input_list_container.add(&wrapper);
                 wrapper.show_all();
-                self.input_config_widget_list.insert(
-                    id,
-                    (
-                        input_name.to_string(),
-                        input_config,
-                        input_config_view,
-                        wrapper,
-                    ),
-                );
+                self.input_config_widget_list
+                    .insert(id, (input_name, input_config, input_config_view, wrapper));
+
+                input_list_changed = true;
             }
             Msg::AddVideoInput => {
                 let input_video_count = self
@@ -236,15 +238,10 @@ impl Update for Win {
 
                 self.input_list_container.add(&wrapper);
                 wrapper.show_all();
-                self.input_config_widget_list.insert(
-                    id,
-                    (
-                        input_name.to_string(),
-                        input_config,
-                        input_config_view,
-                        wrapper,
-                    ),
-                );
+                self.input_config_widget_list
+                    .insert(id, (input_name, input_config, input_config_view, wrapper));
+
+                input_list_changed = true;
             }
             Msg::AddPictureInput => {
                 let input_picture_count = self
@@ -267,15 +264,10 @@ impl Update for Win {
 
                 self.input_list_container.add(&wrapper);
                 wrapper.show_all();
-                self.input_config_widget_list.insert(
-                    id,
-                    (
-                        input_name.to_string(),
-                        input_config,
-                        input_config_view,
-                        wrapper,
-                    ),
-                );
+                self.input_config_widget_list
+                    .insert(id, (input_name, input_config, input_config_view, wrapper));
+
+                input_list_changed = true;
             }
             Msg::AddMidiInput => {
                 let input_midi_count = self
@@ -296,15 +288,10 @@ impl Update for Win {
 
                 self.input_list_container.add(&wrapper);
                 wrapper.show_all();
-                self.input_config_widget_list.insert(
-                    id,
-                    (
-                        input_name.to_string(),
-                        input_config,
-                        input_config_view,
-                        wrapper,
-                    ),
-                );
+                self.input_config_widget_list
+                    .insert(id, (input_name, input_config, input_config_view, wrapper));
+
+                input_list_changed = true;
             }
             Msg::RemoveInput(id) => {
                 if let Some((_, _, _, input_view_wrapper)) = self.input_config_widget_list.get(&id)
@@ -312,6 +299,8 @@ impl Update for Win {
                     self.input_list_container.remove(input_view_wrapper);
                 }
                 self.input_config_widget_list.remove(&id);
+
+                input_list_changed = true;
             }
             Msg::UpdateInputConfig(id, new_name, new_config) => {
                 if let Some((ref mut name, ref mut config, _, _)) =
@@ -320,6 +309,8 @@ impl Update for Win {
                     *name = new_name;
                     *config = new_config;
                 }
+
+                input_list_changed = true;
             }
 
             Msg::AddRenderStage => {
@@ -335,39 +326,82 @@ impl Update for Win {
                 };
 
                 let (id, wrapper, render_stage_config_view) =
-                    stage_config::build_render_stage_config_row(&self.relm, &render_stage_config);
+                    stage_config::build_render_stage_config_row(
+                        &self.relm,
+                        &self.model.project_path,
+                        &render_stage_config,
+                        &get_input_choice_list(&self.model.config),
+                    );
 
                 self.render_stage_config_list_container.add(&wrapper);
                 wrapper.show_all();
-                self.render_stage_config_widget_list.insert(
-                    id,
-                    (
-                        render_stage_name.to_string(),
-                        render_stage_config,
-                        render_stage_config_view,
-                        wrapper,
-                    ),
-                );
+                self.render_stage_config_widget_list
+                    .insert(id, (render_stage_config, render_stage_config_view, wrapper));
+                self.render_stage_order.push(id);
+
+                render_chain_changed = true;
             }
 
             Msg::RemoveRenderStage(id) => {
-                if let Some((_, _, _, render_stage_config_view_wrapper)) =
+                if let Some((_, _, render_stage_config_view_wrapper)) =
                     self.render_stage_config_widget_list.get(&id)
                 {
                     self.render_stage_config_list_container
                         .remove(render_stage_config_view_wrapper);
                 }
                 self.render_stage_config_widget_list.remove(&id);
+                if let Some(id_index) = self.render_stage_order.iter().position(|&n| n == id) {
+                    self.render_stage_order.remove(id_index);
+                }
+
+                render_chain_changed = true;
             }
-            Msg::UpdateRenderStageConfig(id, new_name, new_config) => {
-                if let Some((ref mut name, ref mut config, _, _)) =
+            Msg::UpdateRenderStageConfig(id, new_config) => {
+                if id == self.final_stage_id {
+                    self.model.config.final_stage = new_config;
+                } else if let Some((ref mut config, _, _)) =
                     self.render_stage_config_widget_list.get_mut(&id)
                 {
-                    *name = new_name;
                     *config = new_config;
                 }
+
+                render_chain_changed = true;
             }
-            _ => unimplemented!(),
+        }
+
+        if input_list_changed {
+            self.model.config.inputs.clear();
+            for (name, config, _, _) in self.input_config_widget_list.values() {
+                self.model
+                    .config
+                    .inputs
+                    .insert(name.clone(), config.clone());
+            }
+        }
+
+        if render_chain_changed {
+            self.model.config.render_chain.clear();
+            for id in &self.render_stage_order {
+                let (config, _, _) = self.render_stage_config_widget_list.get(id).unwrap();
+                self.model.config.render_chain.push(config.clone());
+            }
+        }
+
+        let new_input_choice_list: HashSet<String> =
+            HashSet::from_iter(get_input_choice_list(&self.model.config));
+        if new_input_choice_list != input_choice_list {
+            let input_choice_list = get_input_choice_list(&self.model.config);
+            for (_, render_stage_config_widget, _) in self.render_stage_config_widget_list.values()
+            {
+                render_stage_config_widget.emit(RenderStageConfigViewMsg::UpdateInputChoiceList(
+                    input_choice_list.clone(),
+                ));
+            }
+
+            self.final_stage_widget
+                .emit(RenderStageConfigViewMsg::UpdateInputChoiceList(
+                    input_choice_list,
+                ));
         }
     }
 }
@@ -382,6 +416,7 @@ impl Widget for Win {
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
         let mut input_config_widget_list = HashMap::new();
         let mut render_stage_config_widget_list = HashMap::new();
+        let mut render_stage_order = Vec::new();
 
         let model = model;
         let window = gtk::Window::new(WindowType::Toplevel);
@@ -390,7 +425,6 @@ impl Widget for Win {
         window.set_title("wvr launcher");
         window.set_border_width(10);
         window.set_position(gtk::WindowPosition::Center);
-        window.set_default_size(960, 70);
 
         let tabs_container = Notebook::new();
 
@@ -408,12 +442,23 @@ impl Widget for Win {
         let (render_stage_config_list_panel, render_stage_config_list_container) =
             stage_config::build_list_view(
                 relm,
-                &mut render_stage_config_widget_list,
+                &model.project_path,
                 &model.config.render_chain,
+                &get_input_choice_list(&model.config),
+                &mut render_stage_config_widget_list,
+                &mut render_stage_order,
             );
 
         let final_stage_panel = gtk::Box::new(Vertical, 0);
-        // TODO
+        let final_stage_id = Uuid::new_v4();
+        let final_stage_widget = final_stage_panel
+            .add_widget::<stage_config::RenderStageConfigView>((
+                final_stage_id,
+                model.project_path.clone(),
+                model.config.final_stage.clone(),
+                get_input_choice_list(&model.config),
+                relm.clone(),
+            ));
 
         tabs_container.append_page(&view_config_widget, Some(&Label::new(Some("View"))));
         tabs_container.append_page(&server_config_panel, Some(&Label::new(Some("Server"))));
@@ -464,13 +509,17 @@ impl Widget for Win {
 
             render_stage_config_list_container,
             render_stage_config_widget_list,
+            render_stage_order,
+
+            final_stage_id,
+            final_stage_widget,
 
             relm: relm.clone(),
         }
     }
 }
 
-fn get_config() -> Result<Option<(PathBuf, ProjectConfig)>> {
+fn get_config() -> std::option::Option<(PathBuf, ProjectConfig)> {
     let wvr_data_path = wvr_data::get_data_path();
 
     let mut config_path = None;
@@ -480,7 +529,7 @@ fn get_config() -> Result<Option<(PathBuf, ProjectConfig)>> {
         match nfd2::open_file_dialog(None, Some(&projects_path)).expect("oh no") {
             Response::Okay(file_path) => config_path = Some(file_path),
             Response::OkayMultiple(_) => (),
-            Response::Cancel => return Ok(None),
+            Response::Cancel => return None,
         }
     }
 
@@ -493,11 +542,11 @@ fn get_config() -> Result<Option<(PathBuf, ProjectConfig)>> {
         panic!("Could not find config file {:?}", project_path);
     };
 
-    Ok(Some((project_path, config)))
+    Some((project_path, config))
 }
 
 pub fn main() -> Result<()> {
-    if let Some(project) = get_config()? {
+    if let Some(project) = get_config() {
         Win::run(project).expect("Win::run failed");
     }
 
