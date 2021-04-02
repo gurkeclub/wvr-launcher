@@ -501,6 +501,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "path-absolutize"
+version = "3.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7bf455a55d762f9ad0385747ba7fda9bd3dee9b40469bfb1c64c3aa6b073ee9"
+dependencies = [
+ "path-dedot",
+]
+
+[[package]]
+name = "path-calculate"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4690055139867a4a0d11d18ab98d80b325d7aa573b99e0ae8e1bc787a4282da7"
+dependencies = [
+ "path-absolutize",
+]
+
+[[package]]
+name = "path-dedot"
+version = "3.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7794b94034e62eef81e8b9ea0690b31f522fd38394ca51e7997d499d0372fb5"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -858,13 +885,14 @@ dependencies = [
 
 [[package]]
 name = "wvr-launcher"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anyhow",
  "gdk",
  "glib",
  "gtk",
  "nfd2",
+ "path-calculate",
  "relm",
  "relm-derive",
  "serde_json",

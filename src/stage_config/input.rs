@@ -1,11 +1,8 @@
 use gtk::prelude::{GtkListStoreExtManual, TreeSortableExtManual};
 use gtk::Orientation::Horizontal;
 use gtk::{
-    ComboBoxExt, ComboBoxText, ContainerExt, Label, LabelExt, SortColumn, SortType, StateFlags,
-    WidgetExt,
+    ComboBoxExt, ComboBoxText, ContainerExt, Label, LabelExt, SortColumn, SortType, WidgetExt,
 };
-
-use gdk::RGBA;
 
 use relm::{connect, Relm};
 
@@ -20,15 +17,6 @@ pub fn build_input_row(
     input_value: &SampledInput,
 ) -> (gtk::Box, ComboBoxText, ComboBoxText) {
     let outer_wrapper = gtk::Box::new(Horizontal, 2);
-    outer_wrapper.override_background_color(
-        StateFlags::NORMAL,
-        Some(&RGBA {
-            red: 0.0,
-            green: 0.0,
-            blue: 0.0,
-            alpha: 0.0625,
-        }),
-    );
 
     let wrapper = gtk::Box::new(Horizontal, 2);
     wrapper.set_property_margin(4);

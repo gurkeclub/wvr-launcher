@@ -12,7 +12,7 @@ use wvr_data::config::project_config::ViewConfig;
 
 pub fn build_view(relm: &Relm<crate::Win>, bpm: f64, view_config: &ViewConfig) -> gtk::Box {
     let view_config_container = gtk::Box::new(Vertical, 2);
-    view_config_container.set_property_margin(4);
+    view_config_container.set_property_margin(8);
 
     // BPM row creation
     let bpm_row = gtk::Box::new(Horizontal, 8);

@@ -9,13 +9,15 @@ use uuid::Uuid;
 
 use glib::Cast;
 
-use gdk::RGBA;
-use gtk::prelude::{GtkListStoreExtManual, NotebookExtManual, TreeSortableExtManual};
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    Adjustment, Button, ButtonExt, ComboBoxExt, ComboBoxText, ContainerExt, EditableSignals, Entry,
-    EntryExt, GtkListStoreExt, Label, LabelExt, Notebook, ScrolledWindow, SortColumn, SortType,
-    SpinButtonExt, StateFlags, SwitchExt, TreeIter, TreeModel, TreeModelExt, WidgetExt,
+    prelude::{GtkListStoreExtManual, NotebookExtManual, TreeSortableExtManual},
+    NotebookExt,
+};
+use gtk::{
+    Adjustment, Button, ButtonExt, ComboBoxExt, ComboBoxText, ComboBoxTextExt, ContainerExt,
+    EditableSignals, Entry, EntryExt, GtkListStoreExt, Label, LabelExt, Notebook, PackType,
+    ScrolledWindow, SortColumn, SortType, TreeIter, TreeModel, TreeModelExt, WidgetExt,
 };
 
 use relm::{connect, Component, ContainerWidget, Relm, Update, Widget};
@@ -31,8 +33,6 @@ use wvr_data::DataHolder;
 pub mod input;
 pub mod variable;
 
-use variable::VariableInput;
-
 pub fn build_list_view(
     relm: &Relm<crate::Win>,
     project_path: &Path,
@@ -47,16 +47,13 @@ pub fn build_list_view(
         ),
     >,
     render_stage_order: &mut Vec<Uuid>,
-) -> (gtk::Box, gtk::Box) {
-    let render_stage_list_panel = gtk::Box::new(Vertical, 2);
-    render_stage_list_panel.set_property_margin(4);
-
-    let render_stage_list_control_container = gtk::Box::new(Horizontal, 8);
-    render_stage_list_control_container.set_property_margin(8);
+) -> Notebook {
+    let render_stage_list_container = Notebook::new();
+    render_stage_list_container.set_property_margin(8);
+    render_stage_list_container.set_show_border(false);
 
     let add_render_stage_button = Button::new();
-    add_render_stage_button.set_label("Add Render Stage");
-    add_render_stage_button.set_hexpand(true);
+    add_render_stage_button.set_label("+");
     connect!(
         relm,
         add_render_stage_button,
@@ -64,10 +61,8 @@ pub fn build_list_view(
         Some(crate::Msg::AddRenderStage)
     );
 
-    render_stage_list_control_container.add(&add_render_stage_button);
-
-    let render_stage_list_container = gtk::Box::new(Vertical, 16);
-    render_stage_list_container.set_property_margin(8);
+    add_render_stage_button.show_all();
+    render_stage_list_container.set_action_widget(&add_render_stage_button, PackType::End);
 
     for render_stage_config in render_stage_config_list.iter() {
         let (id, wrapper, render_stage_config_view) = build_render_stage_config_row(
@@ -76,7 +71,9 @@ pub fn build_list_view(
             &render_stage_config,
             &input_choice_list,
         );
-        render_stage_list_container.add(&wrapper);
+        render_stage_list_container
+            .append_page(&wrapper, Some(&Label::new(Some(&render_stage_config.name))));
+
         render_stage_config_widget_list.insert(
             id,
             (
@@ -89,19 +86,7 @@ pub fn build_list_view(
         render_stage_order.push(id);
     }
 
-    let render_stage_list_container_wrapper = ScrolledWindow::new(
-        Some(&Adjustment::new(320.0, 320.0, 10000.0, 1.0, 1.0, 1.0)),
-        Some(&Adjustment::new(320.0, 320.0, 100000.0, 0.0, 0.0, 1.0)),
-    );
-    render_stage_list_container_wrapper.set_size_request(480, 320);
-    render_stage_list_container_wrapper.set_hexpand(true);
-    render_stage_list_container_wrapper.set_vexpand(true);
-    render_stage_list_container_wrapper.add(&render_stage_list_container);
-
-    render_stage_list_panel.add(&render_stage_list_container_wrapper);
-    render_stage_list_panel.add(&render_stage_list_control_container);
-
-    (render_stage_list_panel, render_stage_list_container)
+    render_stage_list_container
 }
 
 pub fn build_render_stage_config_row(
@@ -112,15 +97,7 @@ pub fn build_render_stage_config_row(
 ) -> (Uuid, gtk::Box, Component<RenderStageConfigView>) {
     let id = Uuid::new_v4();
     let wrapper = gtk::Box::new(Horizontal, 2);
-
-    let remove_button = Button::new();
-    remove_button.set_label("Delete");
-    connect!(
-        relm,
-        remove_button,
-        connect_clicked(_),
-        Some(crate::Msg::RemoveRenderStage(id))
-    );
+    wrapper.set_property_margin(4);
 
     let render_stage_config_view = wrapper.add_widget::<RenderStageConfigView>((
         id,
@@ -129,7 +106,6 @@ pub fn build_render_stage_config_row(
         input_choice_list.to_vec(),
         relm.clone(),
     ));
-    wrapper.add(&remove_button);
 
     (id, wrapper, render_stage_config_view)
 }
@@ -141,7 +117,7 @@ pub enum RenderStageConfigViewMsg {
     SetPrecision(String),
 
     UpdateInputList,
-    UpdateVariableList,
+    UpdateVariable(String, DataHolder),
     UpdateInputChoiceList(Vec<String>),
 }
 
@@ -157,14 +133,10 @@ pub struct RenderStageConfigView {
     relm: Relm<Self>,
     root: gtk::Box,
 
-    filter_chooser: ComboBoxText,
-    precision_chooser: ComboBoxText,
-
     input_list_container: gtk::Box,
     input_widget_list: HashMap<String, (gtk::Box, ComboBoxText, ComboBoxText)>,
 
     variable_list_container: gtk::Box,
-    variable_widget_list: HashMap<String, (gtk::Box, VariableInput)>,
 }
 impl RenderStageConfigView {
     pub fn update_input_list(&mut self) {
@@ -198,37 +170,8 @@ impl RenderStageConfigView {
         }
     }
 
-    pub fn update_variable_list(&mut self) {
-        self.model.config.variables.clear();
-        for (variable_name, (_, variable_input)) in self.variable_widget_list.iter() {
-            let variable_as_data_holder = match variable_input {
-                VariableInput::Bool(bool_switch) => DataHolder::Bool(bool_switch.get_active()),
-                VariableInput::Int(int_spinner) => DataHolder::Int(int_spinner.get_value() as i32),
-                VariableInput::Float(float_spinner) => {
-                    DataHolder::Float(float_spinner.get_value() as f32)
-                }
-                VariableInput::Vec2(x_spinner, y_spinner) => {
-                    DataHolder::Float2([x_spinner.get_value() as f32, y_spinner.get_value() as f32])
-                }
-                VariableInput::Vec3(x_spinner, y_spinner, z_spinner) => DataHolder::Float3([
-                    x_spinner.get_value() as f32,
-                    y_spinner.get_value() as f32,
-                    z_spinner.get_value() as f32,
-                ]),
-                VariableInput::Vec4(x_spinner, y_spinner, z_spinner, w_spinner) => {
-                    DataHolder::Float4([
-                        x_spinner.get_value() as f32,
-                        y_spinner.get_value() as f32,
-                        z_spinner.get_value() as f32,
-                        w_spinner.get_value() as f32,
-                    ])
-                }
-            };
-            self.model
-                .config
-                .variables
-                .insert(variable_name.clone(), variable_as_data_holder);
-        }
+    pub fn update_variable(&mut self, name: &str, value: DataHolder) {
+        self.model.config.variables.insert(name.to_string(), value);
     }
 
     pub fn update_input_choice_list(&mut self, input_choice_list: &[String]) {
@@ -272,79 +215,60 @@ impl RenderStageConfigView {
             .unwrap()
             .get(filter_name)
         {
-            let mut input_to_remove_list = Vec::new();
-            for (input_name, (input_wrapper, _, _)) in self.input_widget_list.iter() {
-                if !filter_config.inputs.contains(input_name) {
-                    self.input_list_container.remove(input_wrapper);
-                    self.model.config.inputs.remove(input_name);
-                    input_to_remove_list.push(input_name.clone())
-                }
-            }
-            for input_name in input_to_remove_list {
-                self.input_widget_list.remove(&input_name);
-            }
+            let old_inputs = self.model.config.inputs.clone();
 
-            let mut input_to_insert_list = Vec::new();
+            self.model.config.inputs.clear();
+            self.input_widget_list.clear();
+            for children in &self.input_list_container.get_children() {
+                self.input_list_container.remove(children);
+            }
+            let default_input = SampledInput::Linear(self.model.input_choice_list[0].clone());
             for uniform_name in &filter_config.inputs {
-                if !self.input_widget_list.contains_key(uniform_name) {
-                    let input_value = SampledInput::Linear(self.model.input_choice_list[0].clone());
+                let input_value = old_inputs.get(uniform_name).unwrap_or(&default_input);
 
-                    let (input_wrapper, input_type_chooser, input_name_chooser) =
-                        input::build_input_row(
-                            &self.relm,
-                            &self.model.input_choice_list,
-                            uniform_name,
-                            &input_value,
-                        );
+                let (input_wrapper, input_type_chooser, input_name_chooser) =
+                    input::build_input_row(
+                        &self.relm,
+                        &self.model.input_choice_list,
+                        uniform_name,
+                        &input_value,
+                    );
 
-                    self.model
-                        .config
-                        .inputs
-                        .insert(uniform_name.clone(), input_value);
+                self.model
+                    .config
+                    .inputs
+                    .insert(uniform_name.clone(), input_value.clone());
 
-                    self.input_list_container.add(&input_wrapper);
+                self.input_list_container.add(&input_wrapper);
 
-                    input_to_insert_list.push((
-                        uniform_name.clone(),
-                        (input_wrapper, input_type_chooser, input_name_chooser),
-                    ));
-                }
+                self.input_widget_list.insert(
+                    uniform_name.clone(),
+                    (input_wrapper, input_type_chooser, input_name_chooser),
+                );
             }
 
-            self.input_widget_list.extend(input_to_insert_list);
             self.input_list_container.show_all();
 
-            let mut variable_to_remove_list = Vec::new();
-            for (variable_name, (variable_wrapper, _)) in self.variable_widget_list.iter() {
-                if !filter_config.variables.contains_key(variable_name) {
-                    self.variable_list_container.remove(variable_wrapper);
-                    self.model.config.variables.remove(variable_name);
-                    variable_to_remove_list.push(variable_name.clone())
-                }
+            let old_variables = self.model.config.variables.clone();
+
+            self.model.config.variables.clear();
+            for children in &self.variable_list_container.get_children() {
+                self.variable_list_container.remove(children);
             }
-            for variable_name in variable_to_remove_list {
-                self.variable_widget_list.remove(&variable_name);
-            }
+            for (variable_name, default_value) in &filter_config.variables {
+                let variable_value = old_variables.get(variable_name).unwrap_or(default_value);
 
-            let mut variable_to_insert_list = Vec::new();
-            for (variable_name, variable_value) in &filter_config.variables {
-                if !self.variable_widget_list.contains_key(variable_name) {
-                    let (variable_wrapper, variable_input) =
-                        variable::build_variable_row(&self.relm, variable_name, &variable_value);
+                let variable_wrapper =
+                    variable::build_variable_row(&self.relm, variable_name, &variable_value);
 
-                    self.model
-                        .config
-                        .variables
-                        .insert(variable_name.clone(), variable_value.clone());
+                self.variable_list_container.add(&variable_wrapper);
 
-                    self.variable_list_container.add(&variable_wrapper);
-
-                    variable_to_insert_list
-                        .push((variable_name.clone(), (variable_wrapper, variable_input)));
-                }
+                self.model
+                    .config
+                    .variables
+                    .insert(variable_name.clone(), variable_value.clone());
             }
 
-            self.variable_widget_list.extend(variable_to_insert_list);
             self.variable_list_container.show_all();
         }
     }
@@ -396,7 +320,9 @@ impl Update for RenderStageConfigView {
                 self.model.config.precision = new_precision;
             }
             RenderStageConfigViewMsg::UpdateInputList => self.update_input_list(),
-            RenderStageConfigViewMsg::UpdateVariableList => self.update_variable_list(),
+            RenderStageConfigViewMsg::UpdateVariable(name, value) => {
+                self.update_variable(&name, value)
+            }
             RenderStageConfigViewMsg::UpdateInputChoiceList(choice_list) => {
                 self.update_input_choice_list(&choice_list);
             }
@@ -421,22 +347,15 @@ impl Widget for RenderStageConfigView {
 
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
         let mut input_widget_list = HashMap::new();
-        let mut variable_widget_list = HashMap::new();
 
-        let root = gtk::Box::new(Vertical, 0);
-        root.override_background_color(
-            StateFlags::NORMAL,
-            Some(&RGBA {
-                red: 0.0,
-                green: 0.0,
-                blue: 0.0,
-                alpha: 0.125,
-            }),
-        );
+        let root = gtk::Box::new(Vertical, 4);
+
+        let header = gtk::Box::new(Horizontal, 4);
+        let base_config = gtk::Box::new(Vertical, 4);
 
         // Building of the input name row
         let name_row = gtk::Box::new(Horizontal, 8);
-        name_row.set_property_margin(8);
+        //name_row.set_property_margin(8);
 
         let name_label = Label::new(Some("Name: "));
         name_label.set_xalign(0.0);
@@ -444,7 +363,6 @@ impl Widget for RenderStageConfigView {
 
         let name_entry = Entry::new();
         name_entry.set_text(&model.config.name);
-        name_entry.set_hexpand(true);
         connect!(
             relm,
             name_entry,
@@ -459,7 +377,7 @@ impl Widget for RenderStageConfigView {
 
         // Building of the filter selection row
         let filter_row = gtk::Box::new(Horizontal, 8);
-        filter_row.set_property_margin(8);
+        //filter_row.set_property_margin(8);
 
         let filter_label = Label::new(Some("Filter: "));
         filter_label.set_xalign(0.0);
@@ -483,10 +401,10 @@ impl Widget for RenderStageConfigView {
             let filter_chooser = filter_chooser.clone();
             connect!(
                 relm,
-                filter_chooser.clone(),
-                connect_changed(_),
+                filter_chooser,
+                connect_changed(val),
                 Some(RenderStageConfigViewMsg::SetFilter(
-                    filter_chooser.get_active_id().unwrap().to_string()
+                    val.get_active_text().unwrap().to_string()
                 ))
             );
         }
@@ -496,7 +414,7 @@ impl Widget for RenderStageConfigView {
 
         // Building of the precision selection row
         let precision_row = gtk::Box::new(Horizontal, 8);
-        precision_row.set_property_margin(8);
+        //precision_row.set_property_margin(8);
 
         let precision_label = Label::new(Some("Precision: "));
         precision_label.set_xalign(0.0);
@@ -527,10 +445,10 @@ impl Widget for RenderStageConfigView {
             let precision_chooser = precision_chooser.clone();
             connect!(
                 relm,
-                &precision_chooser.clone(),
-                connect_changed(_),
+                &precision_chooser,
+                connect_changed(val),
                 Some(RenderStageConfigViewMsg::SetPrecision(
-                    precision_chooser.get_active_id().unwrap().to_string()
+                    val.get_active_text().unwrap().to_string()
                 ))
             );
         }
@@ -538,9 +456,28 @@ impl Widget for RenderStageConfigView {
         precision_row.add(&precision_label);
         precision_row.add(&precision_chooser);
 
+        base_config.add(&name_row);
+        base_config.add(&filter_row);
+        base_config.add(&precision_row);
+
+        let remove_button = Button::new();
+        remove_button.set_label("Delete");
+        {
+            let id = model.id;
+            connect!(
+                model.parent_relm,
+                remove_button,
+                connect_clicked(_),
+                Some(crate::Msg::RemoveRenderStage(id))
+            );
+        }
+
+        header.add(&base_config);
+        header.add(&remove_button);
+
         // Building of a container for the inputs and variables configuration
         let tabs_container = Notebook::new();
-        tabs_container.set_property_margin(8);
+        tabs_container.set_show_border(false);
 
         // Begin of input list composition panel
         let input_tab = gtk::Box::new(Vertical, 0);
@@ -558,12 +495,28 @@ impl Widget for RenderStageConfigView {
 
         variable_tab.add(&variable_list_container);
 
-        tabs_container.append_page(&input_tab, Some(&Label::new(Some("Inputs"))));
-        tabs_container.append_page(&variable_tab, Some(&Label::new(Some("Variables"))));
+        let input_tab_wrapper = ScrolledWindow::new(
+            Some(&Adjustment::new(320.0, 320.0, 10000.0, 1.0, 1.0, 1.0)),
+            Some(&Adjustment::new(96.0, 120.0, 100000.0, 0.0, 0.0, 1.0)),
+        );
+        input_tab_wrapper.set_size_request(320, 240);
+        input_tab_wrapper.set_hexpand(true);
+        input_tab_wrapper.set_vexpand(true);
+        input_tab_wrapper.add(&input_tab);
 
-        root.add(&name_row);
-        root.add(&filter_row);
-        root.add(&precision_row);
+        let variable_tab_wrapper = ScrolledWindow::new(
+            Some(&Adjustment::new(320.0, 320.0, 10000.0, 1.0, 1.0, 1.0)),
+            Some(&Adjustment::new(96.0, 120.0, 100000.0, 0.0, 0.0, 1.0)),
+        );
+        variable_tab_wrapper.set_size_request(320, 240);
+        variable_tab_wrapper.set_hexpand(true);
+        variable_tab_wrapper.set_vexpand(true);
+        variable_tab_wrapper.add(&variable_tab);
+
+        tabs_container.append_page(&input_tab_wrapper, Some(&Label::new(Some("Inputs"))));
+        tabs_container.append_page(&variable_tab_wrapper, Some(&Label::new(Some("Variables"))));
+
+        root.add(&header);
         root.add(&tabs_container);
 
         if available_filters.contains_key(&model.config.filter) {
@@ -603,12 +556,10 @@ impl Widget for RenderStageConfigView {
                     } else {
                         variable_value
                     };
-                let (variable_wrapper, variable_input) =
+                let variable_wrapper =
                     variable::build_variable_row(relm, &variable_name, &variable_value);
 
                 variable_list_container.add(&variable_wrapper);
-                variable_widget_list
-                    .insert(variable_name.clone(), (variable_wrapper, variable_input));
             }
         }
 
@@ -617,14 +568,10 @@ impl Widget for RenderStageConfigView {
             model,
             root,
 
-            filter_chooser,
-            precision_chooser,
-
             input_list_container,
             input_widget_list,
 
             variable_list_container,
-            variable_widget_list,
         }
     }
 }

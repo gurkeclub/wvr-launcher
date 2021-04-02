@@ -15,8 +15,8 @@ use gtk::prelude::NotebookExtManual;
 use gtk::prelude::WidgetExtManual;
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    Button, ButtonExt, ContainerExt, GtkWindowExt, Inhibit, Label, Notebook, WidgetExt, Window,
-    WindowType,
+    Button, ButtonExt, ContainerExt, GtkWindowExt, Inhibit, Label, Notebook, NotebookExt,
+    WidgetExt, Window, WindowType,
 };
 
 use relm::{connect, Component, ContainerWidget, Relm, Update, Widget};
@@ -92,7 +92,7 @@ pub struct Win {
     input_config_widget_list:
         HashMap<Uuid, (String, InputConfig, Component<InputConfigView>, gtk::Box)>,
 
-    render_stage_config_list_container: gtk::Box,
+    render_stage_config_list_container: Notebook,
     render_stage_config_widget_list: HashMap<
         Uuid,
         (
@@ -206,8 +206,12 @@ impl Update for Win {
                     height: 480,
                 };
 
-                let (id, wrapper, input_config_view) =
-                    input_config::build_input_config_row(&self.relm, &input_name, &input_config);
+                let (id, wrapper, input_config_view) = input_config::build_input_config_row(
+                    &self.relm,
+                    &self.model.project_path,
+                    &input_name,
+                    &input_config,
+                );
 
                 self.input_list_container.add(&wrapper);
                 wrapper.show_all();
@@ -233,8 +237,12 @@ impl Update for Win {
                     speed: Speed::Fps(25.0),
                 };
 
-                let (id, wrapper, input_config_view) =
-                    input_config::build_input_config_row(&self.relm, &input_name, &input_config);
+                let (id, wrapper, input_config_view) = input_config::build_input_config_row(
+                    &self.relm,
+                    &self.model.project_path,
+                    &input_name,
+                    &input_config,
+                );
 
                 self.input_list_container.add(&wrapper);
                 wrapper.show_all();
@@ -259,8 +267,12 @@ impl Update for Win {
                     height: 480,
                 };
 
-                let (id, wrapper, input_config_view) =
-                    input_config::build_input_config_row(&self.relm, &input_name, &input_config);
+                let (id, wrapper, input_config_view) = input_config::build_input_config_row(
+                    &self.relm,
+                    &self.model.project_path,
+                    &input_name,
+                    &input_config,
+                );
 
                 self.input_list_container.add(&wrapper);
                 wrapper.show_all();
@@ -283,8 +295,12 @@ impl Update for Win {
                     name: "*".to_string(),
                 };
 
-                let (id, wrapper, input_config_view) =
-                    input_config::build_input_config_row(&self.relm, &input_name, &input_config);
+                let (id, wrapper, input_config_view) = input_config::build_input_config_row(
+                    &self.relm,
+                    &self.model.project_path,
+                    &input_name,
+                    &input_config,
+                );
 
                 self.input_list_container.add(&wrapper);
                 wrapper.show_all();
@@ -333,7 +349,9 @@ impl Update for Win {
                         &get_input_choice_list(&self.model.config),
                     );
 
-                self.render_stage_config_list_container.add(&wrapper);
+                self.render_stage_config_list_container
+                    .append_page(&wrapper, Some(&Label::new(Some(&render_stage_config.name))));
+
                 wrapper.show_all();
                 self.render_stage_config_widget_list
                     .insert(id, (render_stage_config, render_stage_config_view, wrapper));
@@ -359,9 +377,14 @@ impl Update for Win {
             Msg::UpdateRenderStageConfig(id, new_config) => {
                 if id == self.final_stage_id {
                     self.model.config.final_stage = new_config;
-                } else if let Some((ref mut config, _, _)) =
+                } else if let Some((ref mut config, _, render_stage_config_view_wrapper)) =
                     self.render_stage_config_widget_list.get_mut(&id)
                 {
+                    self.render_stage_config_list_container.set_tab_label_text(
+                        render_stage_config_view_wrapper,
+                        new_config.name.as_str(),
+                    );
+
                     *config = new_config;
                 }
 
@@ -427,6 +450,7 @@ impl Widget for Win {
         window.set_position(gtk::WindowPosition::Center);
 
         let tabs_container = Notebook::new();
+        tabs_container.set_tab_pos(gtk::PositionType::Left);
 
         let view_config_widget =
             view_config::build_view(relm, model.config.bpm as f64, &model.config.view);
@@ -435,19 +459,19 @@ impl Widget for Win {
 
         let (input_list_panel, input_list_container) = input_config::build_list_view(
             relm,
+            &model.project_path,
             &mut input_config_widget_list,
             &model.config.inputs,
         );
 
-        let (render_stage_config_list_panel, render_stage_config_list_container) =
-            stage_config::build_list_view(
-                relm,
-                &model.project_path,
-                &model.config.render_chain,
-                &get_input_choice_list(&model.config),
-                &mut render_stage_config_widget_list,
-                &mut render_stage_order,
-            );
+        let render_stage_config_list_container = stage_config::build_list_view(
+            relm,
+            &model.project_path,
+            &model.config.render_chain,
+            &get_input_choice_list(&model.config),
+            &mut render_stage_config_widget_list,
+            &mut render_stage_order,
+        );
 
         let final_stage_panel = gtk::Box::new(Vertical, 0);
         let final_stage_id = Uuid::new_v4();
@@ -460,14 +484,33 @@ impl Widget for Win {
                 relm.clone(),
             ));
 
-        tabs_container.append_page(&view_config_widget, Some(&Label::new(Some("View"))));
+        tabs_container.append_page(&view_config_widget, Some(&Label::new(Some("General"))));
         tabs_container.append_page(&server_config_panel, Some(&Label::new(Some("Server"))));
         tabs_container.append_page(&input_list_panel, Some(&Label::new(Some("Inputs"))));
         tabs_container.append_page(
-            &render_stage_config_list_panel,
+            &render_stage_config_list_container,
             Some(&Label::new(Some("Render chain"))),
         );
         tabs_container.append_page(&final_stage_panel, Some(&Label::new(Some("Final stage"))));
+
+        tabs_container
+            .get_tab_label(&view_config_widget)
+            .unwrap()
+            .set_tooltip_text(Some("Configure general parameters."));
+        tabs_container
+            .get_tab_label(&server_config_panel)
+            .unwrap()
+            .set_tooltip_text(Some(
+                "/!\\ Not Implemented /!\\ \nConfigure wvr control server.",
+            ));
+        tabs_container
+            .get_tab_label(&input_list_panel)
+            .unwrap()
+            .set_tooltip_text(Some("Configure inputs."));
+        tabs_container
+            .get_tab_label(&render_stage_config_list_container)
+            .unwrap()
+            .set_tooltip_text(Some("Configure the render chain stages."));
 
         let control_container = gtk::Box::new(Horizontal, 8);
 

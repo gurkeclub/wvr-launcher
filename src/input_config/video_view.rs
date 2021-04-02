@@ -1,7 +1,13 @@
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
 use gdk::RGBA;
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    Adjustment, ContainerExt, EditableSignals, Entry, EntryExt, Label, LabelExt, RadioButton,
+    Adjustment, ContainerExt, EditableSignals, Entry, EntryExt, FileChooserAction,
+    FileChooserButton, FileChooserButtonExt, FileChooserExt, Label, LabelExt, RadioButton,
     SpinButton, SpinButtonExt, StateFlags, ToggleButtonExt, WidgetExt,
 };
 
@@ -12,7 +18,11 @@ use super::InputConfigView;
 use super::InputConfigViewModel;
 use super::InputConfigViewMsg;
 
-pub fn build_video_view(relm: &Relm<InputConfigView>, model: &InputConfigViewModel) -> gtk::Box {
+pub fn build_video_view(
+    relm: &Relm<InputConfigView>,
+    project_path: &Path,
+    model: &InputConfigViewModel,
+) -> gtk::Box {
     let root = gtk::Box::new(Vertical, 0);
     root.override_background_color(
         StateFlags::NORMAL,
@@ -58,14 +68,33 @@ pub fn build_video_view(relm: &Relm<InputConfigView>, model: &InputConfigViewMod
         video_path_label.set_xalign(0.0);
         video_path_label.set_size_request(48, 0);
 
-        let video_path = Entry::new();
-        video_path.set_text(&path);
+        let video_path = FileChooserButton::new("Select video file", FileChooserAction::Open);
+
+        let absolute_path = project_path.join(&path);
+        let absolute_path = if absolute_path.exists() {
+            Some(absolute_path)
+        } else if let Ok(absolute_path) = PathBuf::from_str(&path) {
+            Some(absolute_path)
+        } else {
+            None
+        };
+
+        if let Some(absolute_path) = absolute_path {
+            video_path.set_filename(&absolute_path);
+        }
+
         video_path.set_hexpand(true);
         connect!(
             relm,
             video_path,
-            connect_changed(val),
-            Some(InputConfigViewMsg::SetPath(val.get_text().to_string()))
+            connect_file_set(val),
+            if let Some(path) = val.get_filename() {
+                Some(InputConfigViewMsg::SetPath(
+                    path.to_str().unwrap().to_string(),
+                ))
+            } else {
+                None
+            }
         );
 
         video_path_row.add(&video_path_label);

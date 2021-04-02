@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
@@ -12,6 +13,8 @@ use relm::{connect, Component, ContainerWidget, Relm, Update, Widget};
 use relm_derive::Msg;
 use wvr_data::config::project_config::{InputConfig, Speed};
 
+use path_calculate::*;
+
 pub mod cam_view;
 pub mod midi_view;
 pub mod picture_view;
@@ -19,17 +22,17 @@ pub mod video_view;
 
 pub fn build_list_view(
     relm: &Relm<crate::Win>,
+    project_path: &Path,
     input_config_widget_list: &mut HashMap<
         Uuid,
         (String, InputConfig, Component<InputConfigView>, gtk::Box),
     >,
     input_config_list: &HashMap<String, InputConfig>,
 ) -> (gtk::Box, gtk::Box) {
-    let input_list_panel = gtk::Box::new(Vertical, 2);
-    input_list_panel.set_property_margin(4);
+    let input_list_panel = gtk::Box::new(Vertical, 4);
+    input_list_panel.set_property_margin(8);
 
     let input_list_control_container = gtk::Box::new(Horizontal, 8);
-    input_list_control_container.set_property_margin(8);
 
     let add_cam_button = Button::new();
     add_cam_button.set_label("Add Camera");
@@ -77,12 +80,10 @@ pub fn build_list_view(
     input_list_control_container.add(&add_midi_button);
 
     let input_list_container = gtk::Box::new(Vertical, 16);
-    input_list_container.set_property_margin(8);
-    //input_list_container.override_background_color(StateFlags::NORMAL, Some(&RGBA::black()));
 
     for (input_name, input_config) in input_config_list.iter() {
         let (id, wrapper, input_config_view) =
-            build_input_config_row(relm, input_name, &input_config);
+            build_input_config_row(relm, project_path, input_name, &input_config);
         input_list_container.add(&wrapper);
         input_config_widget_list.insert(
             id,
@@ -112,6 +113,7 @@ pub fn build_list_view(
 
 pub fn build_input_config_row(
     relm: &Relm<crate::Win>,
+    project_path: &Path,
     input_name: &str,
     input_config: &InputConfig,
 ) -> (Uuid, gtk::Box, Component<InputConfigView>) {
@@ -171,6 +173,7 @@ pub fn build_input_config_row(
 
     wrapper.add(&row_label);
     let input_config_view = wrapper.add_widget::<InputConfigView>((
+        project_path.to_owned(),
         id,
         input_name.to_string(),
         input_config.clone(),
@@ -193,6 +196,7 @@ pub enum InputConfigViewMsg {
 
 pub struct InputConfigViewModel {
     parent_relm: Relm<crate::Win>,
+    project_path: PathBuf,
     id: Uuid,
     name: String,
     config: InputConfig,
@@ -204,15 +208,19 @@ pub struct InputConfigView {
 
 impl Update for InputConfigView {
     type Model = InputConfigViewModel;
-    type ModelParam = (Uuid, String, InputConfig, Relm<crate::Win>);
+    type ModelParam = (PathBuf, Uuid, String, InputConfig, Relm<crate::Win>);
     type Msg = InputConfigViewMsg;
 
-    fn model(_: &Relm<Self>, model: (Uuid, String, InputConfig, Relm<crate::Win>)) -> Self::Model {
+    fn model(
+        _: &Relm<Self>,
+        model: (PathBuf, Uuid, String, InputConfig, Relm<crate::Win>),
+    ) -> Self::Model {
         InputConfigViewModel {
-            id: model.0,
-            name: model.1,
-            config: model.2,
-            parent_relm: model.3,
+            project_path: model.0,
+            id: model.1,
+            name: model.2,
+            config: model.3,
+            parent_relm: model.4,
         }
     }
 
@@ -236,7 +244,13 @@ impl Update for InputConfigView {
                 speed,
             } => match event {
                 InputConfigViewMsg::SetName(new_name) => self.model.name = new_name,
-                InputConfigViewMsg::SetPath(new_path) => *path = new_path,
+                InputConfigViewMsg::SetPath(new_path) => {
+                    if let Ok(new_path) =
+                        PathBuf::from(new_path).related_to(&self.model.project_path)
+                    {
+                        *path = new_path.to_str().unwrap().to_string();
+                    }
+                }
                 InputConfigViewMsg::SetHeight(new_height) => *height = new_height as usize,
                 InputConfigViewMsg::SetWidth(new_width) => *width = new_width as usize,
                 InputConfigViewMsg::SetSpeed(new_speed) => {
@@ -265,7 +279,13 @@ impl Update for InputConfigView {
                 height,
             } => match event {
                 InputConfigViewMsg::SetName(new_name) => self.model.name = new_name,
-                InputConfigViewMsg::SetPath(new_path) => *path = new_path,
+                InputConfigViewMsg::SetPath(new_path) => {
+                    if let Ok(new_path) =
+                        PathBuf::from(new_path).related_to(&self.model.project_path)
+                    {
+                        *path = new_path.to_str().unwrap().to_string();
+                    }
+                }
                 InputConfigViewMsg::SetHeight(new_height) => *height = new_height as usize,
                 InputConfigViewMsg::SetWidth(new_width) => *width = new_width as usize,
                 _ => unreachable!(),
@@ -298,7 +318,9 @@ impl Widget for InputConfigView {
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
         let root = match model.config {
             InputConfig::Cam { .. } => cam_view::build_cam_view(relm, &model),
-            InputConfig::Video { .. } => video_view::build_video_view(relm, &model),
+            InputConfig::Video { .. } => {
+                video_view::build_video_view(relm, &model.project_path, &model)
+            }
             InputConfig::Midi { .. } => midi_view::build_midi_view(relm, &model),
             InputConfig::Picture { .. } => picture_view::build_picture_view(relm, &model),
         };
