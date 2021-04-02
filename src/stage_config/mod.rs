@@ -354,12 +354,6 @@ impl Widget for RenderStageConfigView {
         let base_config = gtk::Box::new(Vertical, 4);
 
         // Building of the input name row
-        let name_row = gtk::Box::new(Horizontal, 8);
-        //name_row.set_property_margin(8);
-
-        let name_label = Label::new(Some("Name: "));
-        name_label.set_xalign(0.0);
-        name_label.set_size_request(48, 0);
 
         let name_entry = Entry::new();
         name_entry.set_text(&model.config.name);
@@ -371,9 +365,6 @@ impl Widget for RenderStageConfigView {
                 val.get_text().to_string()
             ))
         );
-
-        name_row.add(&name_label);
-        name_row.add(&name_entry);
 
         // Building of the filter selection row
         let filter_row = gtk::Box::new(Horizontal, 8);
@@ -392,7 +383,6 @@ impl Widget for RenderStageConfigView {
 
         let filter_chooser = gtk::ComboBoxText::new();
         filter_chooser.set_model(Some(&filter_store));
-        filter_chooser.set_hexpand(true);
 
         filter_chooser.set_id_column(0);
         filter_chooser.set_entry_text_column(1);
@@ -409,7 +399,11 @@ impl Widget for RenderStageConfigView {
             );
         }
 
+        let filter_row_padding = gtk::Box::new(Horizontal, 0);
+        filter_row_padding.set_hexpand(true);
+
         filter_row.add(&filter_label);
+        filter_row.add(&filter_row_padding);
         filter_row.add(&filter_chooser);
 
         // Building of the precision selection row
@@ -430,7 +424,6 @@ impl Widget for RenderStageConfigView {
 
         let precision_chooser = gtk::ComboBoxText::new();
         precision_chooser.set_model(Some(&precision_store));
-        precision_chooser.set_hexpand(true);
 
         precision_chooser.set_id_column(0);
         precision_chooser.set_entry_text_column(1);
@@ -453,10 +446,14 @@ impl Widget for RenderStageConfigView {
             );
         }
 
+        let precision_row_padding = gtk::Box::new(Horizontal, 0);
+        precision_row_padding.set_hexpand(true);
+
         precision_row.add(&precision_label);
+        precision_row.add(&precision_row_padding);
         precision_row.add(&precision_chooser);
 
-        base_config.add(&name_row);
+        base_config.add(&name_entry);
         base_config.add(&filter_row);
         base_config.add(&precision_row);
 
