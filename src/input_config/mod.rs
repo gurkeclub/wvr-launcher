@@ -322,7 +322,7 @@ impl Widget for InputConfigView {
                 video_view::build_video_view(relm, &model.project_path, &model)
             }
             InputConfig::Midi { .. } => midi_view::build_midi_view(relm, &model),
-            InputConfig::Picture { .. } => picture_view::build_picture_view(relm, &model),
+            InputConfig::Picture { .. } => picture_view::build_picture_view(relm, &model.project_path, &model),
         };
 
         Self { model, root }
