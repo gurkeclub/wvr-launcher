@@ -4,9 +4,13 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 use gdk::RGBA;
-use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    Adjustment, Button, ButtonExt, ContainerExt, Label, ScrolledWindow, StateFlags, WidgetExt,
+    Adjustment, Button, ButtonExt, ContainerExt, Label, ScrolledWindow, ScrolledWindowExt,
+    StateFlags, WidgetExt,
+};
+use gtk::{
+    Orientation::{Horizontal, Vertical},
+    PolicyType,
 };
 
 use relm::{connect, Component, ContainerWidget, Relm, Update, Widget};
@@ -96,11 +100,8 @@ pub fn build_list_view(
         );
     }
 
-    let input_list_container_wrapper = ScrolledWindow::new(
-        Some(&Adjustment::new(320.0, 320.0, 10000.0, 1.0, 1.0, 1.0)),
-        Some(&Adjustment::new(320.0, 320.0, 100000.0, 0.0, 0.0, 1.0)),
-    );
-    input_list_container_wrapper.set_size_request(480, 320);
+    let input_list_container_wrapper = ScrolledWindow::new::<Adjustment, Adjustment>(None, None);
+    input_list_container_wrapper.set_policy(PolicyType::Never, PolicyType::Automatic);
     input_list_container_wrapper.set_hexpand(true);
     input_list_container_wrapper.set_vexpand(true);
     input_list_container_wrapper.add(&input_list_container);
@@ -322,7 +323,9 @@ impl Widget for InputConfigView {
                 video_view::build_video_view(relm, &model.project_path, &model)
             }
             InputConfig::Midi { .. } => midi_view::build_midi_view(relm, &model),
-            InputConfig::Picture { .. } => picture_view::build_picture_view(relm, &model.project_path, &model),
+            InputConfig::Picture { .. } => {
+                picture_view::build_picture_view(relm, &model.project_path, &model)
+            }
         };
 
         Self { model, root }

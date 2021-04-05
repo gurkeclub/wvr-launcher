@@ -1,57 +1,81 @@
-use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    Adjustment, AdjustmentExt, Align, ContainerExt, EditableSignals, Label, LabelExt, SpinButton,
-    SpinButtonExt, SpinButtonSignals, Switch, SwitchExt, WidgetExt,
+    AdjustmentExt, ContainerExt, Label, LabelExt, Orientation, PositionType, RangeExt, Scale,
+    ScaleExt, Switch, SwitchExt, WidgetExt,
+};
+use gtk::{
+    BoxExt,
+    Orientation::{Horizontal, Vertical},
 };
 
 use relm::{connect, Relm};
 
-use wvr_data::DataHolder;
+use wvr_data::{DataHolder, DataRange};
 
 use super::{RenderStageConfigView, RenderStageConfigViewMsg};
 
-fn create_int_spinner(relm: &Relm<RenderStageConfigView>, name: &str, value: i64) -> SpinButton {
-    let spinner = SpinButton::new(
-        Some(&Adjustment::new(
-            value as f64,
-            -8192.0,
-            8192.0,
-            1.0,
-            10.0,
-            10.0,
-        )),
-        1.0,
-        0,
-    );
+fn create_int_spinner(
+    relm: &Relm<RenderStageConfigView>,
+    name: &str,
+    value: i64,
+    value_range: &DataRange,
+) -> gtk::Box {
+    let (min_value, max_value, step) =
+        if let DataRange::IntRange(min_value, max_value, step) = value_range {
+            (*min_value as f64, *max_value as f64, *step as f64)
+        } else {
+            (-8192.0, 8192.0, 1.0)
+        };
+
+    let spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    spinner.set_value(value as f64);
+    spinner.set_hexpand(true);
+
+    spinner.set_value_pos(PositionType::Right);
 
     let name = name.to_string();
-    connect!(relm, spinner, connect_changed(val), {
-        val.update();
+    connect!(relm, spinner, connect_value_changed(val), {
         Some(RenderStageConfigViewMsg::UpdateVariable(
             name.clone(),
             DataHolder::Int(val.get_value() as i32),
         ))
     });
 
-    spinner
+    let wrapper = gtk::Box::new(Horizontal, 0);
+    wrapper.pack_end(&spinner, true, true, 0);
+
+    wrapper
 }
-fn create_float_spinner(relm: &Relm<RenderStageConfigView>, name: &str, value: f64) -> SpinButton {
-    let spinner = SpinButton::new(
-        Some(&Adjustment::new(value, -8192.0, 8192.0, 0.001, 0.01, 0.01)),
-        0.01,
-        6,
-    );
+fn create_float_spinner(
+    relm: &Relm<RenderStageConfigView>,
+    name: &str,
+    value: f64,
+    value_range: &DataRange,
+) -> gtk::Box {
+    let (min_value, max_value, step) =
+        if let DataRange::FloatRange(min_value, max_value, step) = value_range {
+            (*min_value, *max_value, *step)
+        } else {
+            (-1.0, 1.0, 0.0001)
+        };
+
+    let spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    spinner.set_value(value as f64);
+    spinner.set_hexpand(true);
+
+    spinner.set_value_pos(PositionType::Right);
 
     let name = name.to_string();
     connect!(relm, spinner, connect_value_changed(val), {
-        val.update();
         Some(RenderStageConfigViewMsg::UpdateVariable(
             name.clone(),
             DataHolder::Float(val.get_value() as f32),
         ))
     });
 
-    spinner
+    let wrapper = gtk::Box::new(Horizontal, 0);
+    wrapper.pack_end(&spinner, true, true, 0);
+
+    wrapper
 }
 
 fn create_float2_spinner(
@@ -59,32 +83,38 @@ fn create_float2_spinner(
     name: &str,
     x: f64,
     y: f64,
+    value_range: &DataRange,
 ) -> gtk::Box {
+    let (min_value, max_value, step) =
+        if let DataRange::FloatRange(min_value, max_value, step) = value_range {
+            (*min_value, *max_value, *step)
+        } else {
+            (-1.0, 1.0, 0.0001)
+        };
+
     let components_wrapper = gtk::Box::new(Vertical, 2);
 
     let x_wrapper = gtk::Box::new(Horizontal, 2);
-    x_wrapper.set_halign(Align::End);
 
     let x_label = Label::new(Some("x"));
     x_label.set_text("x");
-    let x_spinner = SpinButton::new(
-        Some(&Adjustment::new(x, -8192.0, 8192.0, 0.001, 0.01, 0.01)),
-        0.01,
-        6,
-    );
+    let x_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    x_spinner.set_value(x as f64);
+    x_spinner.set_hexpand(true);
+
+    x_spinner.set_value_pos(PositionType::Right);
 
     x_wrapper.add(&x_label);
     x_wrapper.add(&x_spinner);
 
     let y_wrapper = gtk::Box::new(Horizontal, 2);
-    y_wrapper.set_halign(Align::End);
 
     let y_label = Label::new(Some("y"));
-    let y_spinner = SpinButton::new(
-        Some(&Adjustment::new(y, -8192.0, 8192.0, 0.001, 0.01, 0.01)),
-        0.01,
-        6,
-    );
+    let y_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    y_spinner.set_value(y as f64);
+    y_spinner.set_hexpand(true);
+
+    y_spinner.set_value_pos(PositionType::Right);
 
     y_wrapper.add(&y_label);
     y_wrapper.add(&y_spinner);
@@ -97,8 +127,7 @@ fn create_float2_spinner(
         let name = name.clone();
         let x_spinner = x_spinner.clone();
         let y_spinner = y_spinner.clone();
-        connect!(relm, x_spinner, connect_changed(val), {
-            val.update();
+        connect!(relm, x_spinner, connect_value_changed(val), {
             Some(RenderStageConfigViewMsg::UpdateVariable(
                 name.clone(),
                 DataHolder::Float2([val.get_value() as f32, y_spinner.get_value() as f32]),
@@ -110,8 +139,7 @@ fn create_float2_spinner(
         let name = name;
         let x_spinner = x_spinner;
         let y_spinner = y_spinner;
-        connect!(relm, y_spinner, connect_changed(val), {
-            val.update();
+        connect!(relm, y_spinner, connect_value_changed(val), {
             Some(RenderStageConfigViewMsg::UpdateVariable(
                 name.clone(),
                 DataHolder::Float2([x_spinner.get_value() as f32, val.get_value() as f32]),
@@ -128,45 +156,50 @@ fn create_float3_spinner(
     x: f64,
     y: f64,
     z: f64,
+    value_range: &DataRange,
 ) -> gtk::Box {
+    let (min_value, max_value, step) =
+        if let DataRange::FloatRange(min_value, max_value, step) = value_range {
+            (*min_value, *max_value, *step)
+        } else {
+            (-1.0, 1.0, 0.0001)
+        };
+
     let components_wrapper = gtk::Box::new(Vertical, 2);
 
     let x_wrapper = gtk::Box::new(Horizontal, 2);
-    x_wrapper.set_halign(Align::End);
 
     let x_label = Label::new(Some("x"));
     x_label.set_text("x");
-    let x_spinner = SpinButton::new(
-        Some(&Adjustment::new(x, -8192.0, 8192.0, 0.001, 0.01, 0.01)),
-        0.01,
-        6,
-    );
+    let x_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    x_spinner.set_value(x as f64);
+    x_spinner.set_hexpand(true);
+
+    x_spinner.set_value_pos(PositionType::Right);
 
     x_wrapper.add(&x_label);
     x_wrapper.add(&x_spinner);
 
     let y_wrapper = gtk::Box::new(Horizontal, 2);
-    y_wrapper.set_halign(Align::End);
 
     let y_label = Label::new(Some("y"));
-    let y_spinner = SpinButton::new(
-        Some(&Adjustment::new(y, -8192.0, 8192.0, 0.001, 0.01, 0.01)),
-        0.01,
-        6,
-    );
+    let y_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    y_spinner.set_value(y as f64);
+    y_spinner.set_hexpand(true);
+
+    y_spinner.set_value_pos(PositionType::Right);
 
     y_wrapper.add(&y_label);
     y_wrapper.add(&y_spinner);
 
     let z_wrapper = gtk::Box::new(Horizontal, 2);
-    z_wrapper.set_halign(Align::End);
 
     let z_label = Label::new(Some("z"));
-    let z_spinner = SpinButton::new(
-        Some(&Adjustment::new(z, -8192.0, 8192.0, 0.001, 0.01, 0.01)),
-        0.01,
-        6,
-    );
+    let z_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    z_spinner.set_value(z as f64);
+    z_spinner.set_hexpand(true);
+
+    z_spinner.set_value_pos(PositionType::Right);
 
     z_wrapper.add(&z_label);
     z_wrapper.add(&z_spinner);
@@ -181,8 +214,7 @@ fn create_float3_spinner(
         let x_spinner = x_spinner.clone();
         let y_spinner = y_spinner.clone();
         let z_spinner = z_spinner.clone();
-        connect!(relm, x_spinner, connect_changed(val), {
-            val.update();
+        connect!(relm, x_spinner, connect_value_changed(val), {
             Some(RenderStageConfigViewMsg::UpdateVariable(
                 name.clone(),
                 DataHolder::Float3([
@@ -198,8 +230,7 @@ fn create_float3_spinner(
         let x_spinner = x_spinner.clone();
         let y_spinner = y_spinner.clone();
         let z_spinner = z_spinner.clone();
-        connect!(relm, y_spinner, connect_changed(val), {
-            val.update();
+        connect!(relm, y_spinner, connect_value_changed(val), {
             Some(RenderStageConfigViewMsg::UpdateVariable(
                 name.clone(),
                 DataHolder::Float3([
@@ -215,8 +246,7 @@ fn create_float3_spinner(
         let x_spinner = x_spinner;
         let y_spinner = y_spinner;
         let z_spinner = z_spinner;
-        connect!(relm, z_spinner, connect_changed(val), {
-            val.update();
+        connect!(relm, z_spinner, connect_value_changed(val), {
             Some(RenderStageConfigViewMsg::UpdateVariable(
                 name.clone(),
                 DataHolder::Float3([
@@ -238,58 +268,62 @@ fn create_float4_spinner(
     y: f64,
     z: f64,
     w: f64,
+    value_range: &DataRange,
 ) -> gtk::Box {
+    let (min_value, max_value, step) =
+        if let DataRange::FloatRange(min_value, max_value, step) = value_range {
+            (*min_value, *max_value, *step)
+        } else {
+            (-1.0, 1.0, 0.0001)
+        };
+
     let components_wrapper = gtk::Box::new(Vertical, 2);
 
     let x_wrapper = gtk::Box::new(Horizontal, 2);
-    x_wrapper.set_halign(Align::End);
 
     let x_label = Label::new(Some("x"));
     x_label.set_text("x");
-    let x_spinner = SpinButton::new(
-        Some(&Adjustment::new(x, -8192.0, 8192.0, 0.001, 0.01, 0.01)),
-        0.01,
-        6,
-    );
+    let x_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    x_spinner.set_value(x as f64);
+    x_spinner.set_hexpand(true);
+
+    x_spinner.set_value_pos(PositionType::Right);
 
     x_wrapper.add(&x_label);
     x_wrapper.add(&x_spinner);
 
     let y_wrapper = gtk::Box::new(Horizontal, 2);
-    y_wrapper.set_halign(Align::End);
 
     let y_label = Label::new(Some("y"));
-    let y_spinner = SpinButton::new(
-        Some(&Adjustment::new(y, -8192.0, 8192.0, 0.001, 0.01, 0.01)),
-        0.01,
-        6,
-    );
+    let y_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    y_spinner.set_value(y as f64);
+    y_spinner.set_hexpand(true);
+
+    y_spinner.set_value_pos(PositionType::Right);
 
     y_wrapper.add(&y_label);
     y_wrapper.add(&y_spinner);
 
     let z_wrapper = gtk::Box::new(Horizontal, 2);
-    z_wrapper.set_halign(Align::End);
 
     let z_label = Label::new(Some("z"));
-    let z_spinner = SpinButton::new(
-        Some(&Adjustment::new(z, -8192.0, 8192.0, 0.001, 0.01, 0.01)),
-        0.01,
-        6,
-    );
+    let z_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    z_spinner.set_value(z as f64);
+    z_spinner.set_hexpand(true);
+
+    z_spinner.set_value_pos(PositionType::Right);
 
     z_wrapper.add(&z_label);
     z_wrapper.add(&z_spinner);
 
     let w_wrapper = gtk::Box::new(Horizontal, 2);
-    w_wrapper.set_halign(Align::End);
 
     let w_label = Label::new(Some("w"));
-    let w_spinner = SpinButton::new(
-        Some(&Adjustment::new(w, -8192.0, 8192.0, 0.001, 0.01, 0.01)),
-        0.01,
-        6,
-    );
+    let w_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    w_spinner.set_value(w as f64);
+    w_spinner.set_hexpand(true);
+
+    w_spinner.set_value_pos(PositionType::Right);
 
     w_wrapper.add(&w_label);
     w_wrapper.add(&w_spinner);
@@ -306,8 +340,7 @@ fn create_float4_spinner(
         let y_spinner = y_spinner.clone();
         let z_spinner = z_spinner.clone();
         let w_spinner = w_spinner.clone();
-        connect!(relm, x_spinner, connect_changed(val), {
-            val.update();
+        connect!(relm, x_spinner, connect_value_changed(val), {
             Some(RenderStageConfigViewMsg::UpdateVariable(
                 name.clone(),
                 DataHolder::Float4([
@@ -325,8 +358,7 @@ fn create_float4_spinner(
         let y_spinner = y_spinner.clone();
         let z_spinner = z_spinner.clone();
         let w_spinner = w_spinner.clone();
-        connect!(relm, y_spinner, connect_changed(val), {
-            val.update();
+        connect!(relm, y_spinner, connect_value_changed(val), {
             Some(RenderStageConfigViewMsg::UpdateVariable(
                 name.clone(),
                 DataHolder::Float4([
@@ -345,8 +377,7 @@ fn create_float4_spinner(
         let y_spinner = y_spinner.clone();
         let z_spinner = z_spinner.clone();
         let w_spinner = w_spinner.clone();
-        connect!(relm, z_spinner, connect_changed(val), {
-            val.update();
+        connect!(relm, z_spinner, connect_value_changed(val), {
             Some(RenderStageConfigViewMsg::UpdateVariable(
                 name.clone(),
                 DataHolder::Float4([
@@ -365,8 +396,7 @@ fn create_float4_spinner(
         let y_spinner = y_spinner;
         let z_spinner = z_spinner;
         let w_spinner = w_spinner;
-        connect!(relm, w_spinner, connect_changed(val), {
-            val.update();
+        connect!(relm, w_spinner, connect_value_changed(val), {
             Some(RenderStageConfigViewMsg::UpdateVariable(
                 name.clone(),
                 DataHolder::Float4([
@@ -386,23 +416,9 @@ pub fn build_variable_row(
     relm: &Relm<RenderStageConfigView>,
     variable_name: &str,
     variable_value: &DataHolder,
+    variable_range: &DataRange,
 ) -> gtk::Box {
-    let outer_wrapper = gtk::Box::new(Horizontal, 2);
-
-    let wrapper = gtk::Box::new(Horizontal, 2);
-    wrapper.set_property_margin(4);
-
-    let variable_name_label = Label::new(Some(variable_name));
-    variable_name_label.set_xalign(0.0);
-    variable_name_label.set_size_request(48, 0);
-
-    let padding = gtk::Box::new(Horizontal, 0);
-    padding.set_hexpand(true);
-
-    wrapper.add(&variable_name_label);
-    wrapper.add(&padding);
-
-    match variable_value {
+    return match variable_value {
         DataHolder::Bool(value) => {
             let variable_switch = Switch::new();
             variable_switch.set_state(*value);
@@ -417,51 +433,42 @@ pub fn build_variable_row(
                     DataHolder::Bool(val.get_active())
                 ))
             );
-            wrapper.add(&variable_switch);
+
+            let wrapper = gtk::Box::new(Horizontal, 0);
+            wrapper.pack_end(&variable_switch, false, false, 0);
+
+            wrapper
         }
         DataHolder::Int(value) => {
-            let variable_spinner = create_int_spinner(relm, variable_name, *value as i64);
-
-            wrapper.add(&variable_spinner);
+            create_int_spinner(relm, variable_name, *value as i64, variable_range)
         }
         DataHolder::Float(value) => {
-            let variable_spinner = create_float_spinner(relm, variable_name, *value as f64);
-
-            wrapper.add(&variable_spinner);
+            create_float_spinner(relm, variable_name, *value as f64, variable_range)
         }
-        DataHolder::Float2(value) => {
-            let components_wrapper =
-                create_float2_spinner(relm, variable_name, value[0] as f64, value[1] as f64);
-
-            wrapper.add(&components_wrapper);
-        }
-        DataHolder::Float3(value) => {
-            let components_wrapper = create_float3_spinner(
-                relm,
-                variable_name,
-                value[0] as f64,
-                value[1] as f64,
-                value[2] as f64,
-            );
-
-            wrapper.add(&components_wrapper);
-        }
-        DataHolder::Float4(value) => {
-            let components_wrapper = create_float4_spinner(
-                relm,
-                variable_name,
-                value[0] as f64,
-                value[1] as f64,
-                value[2] as f64,
-                value[3] as f64,
-            );
-
-            wrapper.add(&components_wrapper);
-        }
+        DataHolder::Float2(value) => create_float2_spinner(
+            relm,
+            variable_name,
+            value[0] as f64,
+            value[1] as f64,
+            variable_range,
+        ),
+        DataHolder::Float3(value) => create_float3_spinner(
+            relm,
+            variable_name,
+            value[0] as f64,
+            value[1] as f64,
+            value[2] as f64,
+            variable_range,
+        ),
+        DataHolder::Float4(value) => create_float4_spinner(
+            relm,
+            variable_name,
+            value[0] as f64,
+            value[1] as f64,
+            value[2] as f64,
+            value[3] as f64,
+            variable_range,
+        ),
         _ => unimplemented!(),
-    }
-
-    outer_wrapper.add(&wrapper);
-
-    outer_wrapper
+    };
 }

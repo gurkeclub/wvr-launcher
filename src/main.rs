@@ -443,14 +443,16 @@ impl Widget for Win {
 
         let model = model;
         let window = gtk::Window::new(WindowType::Toplevel);
-        let window_container = gtk::Box::new(Vertical, 16);
-
+        window.set_size_request(960, 540);
         window.set_title("wvr launcher");
-        window.set_border_width(10);
+        //window.set_border_width(10);
         window.set_position(gtk::WindowPosition::Center);
+
+        let window_container = gtk::Box::new(Vertical, 0);
 
         let tabs_container = Notebook::new();
         tabs_container.set_tab_pos(gtk::PositionType::Left);
+        tabs_container.set_show_border(false);
 
         let view_config_widget =
             view_config::build_view(relm, model.config.bpm as f64, &model.config.view);
@@ -513,6 +515,7 @@ impl Widget for Win {
             .set_tooltip_text(Some("Configure the render chain stages."));
 
         let control_container = gtk::Box::new(Horizontal, 8);
+        control_container.set_property_margin(8);
 
         let save_button = Button::new();
         save_button.set_label("Save");

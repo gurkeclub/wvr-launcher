@@ -9,15 +9,16 @@ use uuid::Uuid;
 
 use glib::Cast;
 
-use gtk::Orientation::{Horizontal, Vertical};
+use gtk::Orientation::{self, Horizontal, Vertical};
 use gtk::{
     prelude::{GtkListStoreExtManual, NotebookExtManual, TreeSortableExtManual},
     NotebookExt,
 };
 use gtk::{
     Adjustment, Button, ButtonExt, ComboBoxExt, ComboBoxText, ComboBoxTextExt, ContainerExt,
-    EditableSignals, Entry, EntryExt, GtkListStoreExt, Label, LabelExt, Notebook, PackType,
-    ScrolledWindow, SortColumn, SortType, TreeIter, TreeModel, TreeModelExt, WidgetExt,
+    EditableSignals, Entry, EntryExt, Grid, GridExt, GtkListStoreExt, Label, LabelExt, Notebook,
+    OrientableExt, PackType, PolicyType, ScrolledWindow, ScrolledWindowExt, SortColumn, SortType,
+    TreeIter, TreeModel, TreeModelExt, WidgetExt,
 };
 
 use relm::{connect, Component, ContainerWidget, Relm, Update, Widget};
@@ -49,8 +50,9 @@ pub fn build_list_view(
     render_stage_order: &mut Vec<Uuid>,
 ) -> Notebook {
     let render_stage_list_container = Notebook::new();
-    render_stage_list_container.set_property_margin(8);
+    render_stage_list_container.set_tab_pos(gtk::PositionType::Left);
     render_stage_list_container.set_show_border(false);
+    render_stage_list_container.set_scrollable(true);
 
     let add_render_stage_button = Button::new();
     add_render_stage_button.set_label("+");
@@ -62,6 +64,7 @@ pub fn build_list_view(
     );
 
     add_render_stage_button.show_all();
+
     render_stage_list_container.set_action_widget(&add_render_stage_button, PackType::End);
 
     for render_stage_config in render_stage_config_list.iter() {
@@ -97,7 +100,6 @@ pub fn build_render_stage_config_row(
 ) -> (Uuid, gtk::Box, Component<RenderStageConfigView>) {
     let id = Uuid::new_v4();
     let wrapper = gtk::Box::new(Horizontal, 2);
-    wrapper.set_property_margin(4);
 
     let render_stage_config_view = wrapper.add_widget::<RenderStageConfigView>((
         id,
@@ -136,7 +138,7 @@ pub struct RenderStageConfigView {
     input_list_container: gtk::Box,
     input_widget_list: HashMap<String, (gtk::Box, ComboBoxText, ComboBoxText)>,
 
-    variable_list_container: gtk::Box,
+    variable_list_container: Grid,
 }
 impl RenderStageConfigView {
     pub fn update_input_list(&mut self) {
@@ -223,7 +225,10 @@ impl RenderStageConfigView {
                 self.input_list_container.remove(children);
             }
             let default_input = SampledInput::Linear(self.model.input_choice_list[0].clone());
-            for uniform_name in &filter_config.inputs {
+
+            let mut uniform_name_list = filter_config.inputs.clone();
+            uniform_name_list.sort();
+            for uniform_name in &uniform_name_list {
                 let input_value = old_inputs.get(uniform_name).unwrap_or(&default_input);
 
                 let (input_wrapper, input_type_chooser, input_name_chooser) =
@@ -255,13 +260,40 @@ impl RenderStageConfigView {
             for children in &self.variable_list_container.get_children() {
                 self.variable_list_container.remove(children);
             }
-            for (variable_name, default_value) in &filter_config.variables {
+
+            let mut variable_name_list: Vec<String> =
+                filter_config.variables.keys().map(String::clone).collect();
+            variable_name_list.sort();
+
+            for (variable_index, variable_name) in variable_name_list.iter().enumerate() {
+                let (default_value, value_range) =
+                    filter_config.variables.get(variable_name).unwrap();
                 let variable_value = old_variables.get(variable_name).unwrap_or(default_value);
 
-                let variable_wrapper =
-                    variable::build_variable_row(&self.relm, variable_name, &variable_value);
+                let variable_wrapper = variable::build_variable_row(
+                    &self.relm,
+                    variable_name,
+                    &variable_value,
+                    value_range,
+                );
 
-                self.variable_list_container.add(&variable_wrapper);
+                let variable_name_label = Label::new(Some(variable_name));
+                variable_name_label.set_xalign(0.0);
+
+                self.variable_list_container.attach(
+                    &variable_name_label,
+                    0,
+                    variable_index as i32,
+                    1,
+                    1,
+                );
+                self.variable_list_container.attach(
+                    &variable_wrapper,
+                    1,
+                    variable_index as i32,
+                    1,
+                    1,
+                );
 
                 self.model
                     .config
@@ -351,10 +383,11 @@ impl Widget for RenderStageConfigView {
         let root = gtk::Box::new(Vertical, 4);
 
         let header = gtk::Box::new(Horizontal, 4);
+        header.set_property_margin(8);
+
         let base_config = gtk::Box::new(Vertical, 4);
 
         // Building of the input name row
-
         let name_entry = Entry::new();
         name_entry.set_text(&model.config.name);
         connect!(
@@ -368,7 +401,6 @@ impl Widget for RenderStageConfigView {
 
         // Building of the filter selection row
         let filter_row = gtk::Box::new(Horizontal, 8);
-        //filter_row.set_property_margin(8);
 
         let filter_label = Label::new(Some("Filter: "));
         filter_label.set_xalign(0.0);
@@ -408,7 +440,6 @@ impl Widget for RenderStageConfigView {
 
         // Building of the precision selection row
         let precision_row = gtk::Box::new(Horizontal, 8);
-        //precision_row.set_property_margin(8);
 
         let precision_label = Label::new(Some("Precision: "));
         precision_label.set_xalign(0.0);
@@ -474,50 +505,50 @@ impl Widget for RenderStageConfigView {
 
         // Building of a container for the inputs and variables configuration
         let tabs_container = Notebook::new();
+        tabs_container.set_tab_pos(gtk::PositionType::Left);
         tabs_container.set_show_border(false);
 
-        // Begin of input list composition panel
-        let input_tab = gtk::Box::new(Vertical, 0);
-        input_tab.set_property_margin(0);
-
-        let input_list_container = gtk::Box::new(Vertical, 8);
-
-        input_tab.add(&input_list_container);
-
-        // Begin of input list composition panel
+        // Begin of variable list composition panel
         let variable_tab = gtk::Box::new(Vertical, 0);
-        variable_tab.set_property_margin(0);
+        variable_tab.set_property_margin(8);
 
-        let variable_list_container = gtk::Box::new(Vertical, 8);
+        let variable_list_container = gtk::Grid::new();
+        variable_list_container.set_row_spacing(8);
+        variable_list_container.set_column_spacing(4);
+        variable_list_container.set_orientation(Orientation::Vertical);
 
         variable_tab.add(&variable_list_container);
 
-        let input_tab_wrapper = ScrolledWindow::new(
-            Some(&Adjustment::new(320.0, 320.0, 10000.0, 1.0, 1.0, 1.0)),
-            Some(&Adjustment::new(96.0, 120.0, 100000.0, 0.0, 0.0, 1.0)),
-        );
-        input_tab_wrapper.set_size_request(320, 240);
-        input_tab_wrapper.set_hexpand(true);
-        input_tab_wrapper.set_vexpand(true);
-        input_tab_wrapper.add(&input_tab);
+        let variable_tab_wrapper = ScrolledWindow::new::<Adjustment, Adjustment>(None, None);
 
-        let variable_tab_wrapper = ScrolledWindow::new(
-            Some(&Adjustment::new(320.0, 320.0, 10000.0, 1.0, 1.0, 1.0)),
-            Some(&Adjustment::new(96.0, 120.0, 100000.0, 0.0, 0.0, 1.0)),
-        );
-        variable_tab_wrapper.set_size_request(320, 240);
+        variable_tab_wrapper.set_policy(PolicyType::Never, PolicyType::Automatic);
         variable_tab_wrapper.set_hexpand(true);
         variable_tab_wrapper.set_vexpand(true);
         variable_tab_wrapper.add(&variable_tab);
 
-        tabs_container.append_page(&input_tab_wrapper, Some(&Label::new(Some("Inputs"))));
+        // Begin of input list composition panel
+        let input_tab = gtk::Box::new(Vertical, 0);
+        input_tab.set_property_margin(8);
+
+        let input_list_container = gtk::Box::new(Orientation::Vertical, 8);
+
+        input_tab.add(&input_list_container);
+
+        let input_tab_wrapper = ScrolledWindow::new::<Adjustment, Adjustment>(None, None);
+        //input_tab_wrapper.set_size_request(320, 240);
+        input_tab_wrapper.set_policy(PolicyType::Never, PolicyType::Automatic);
+        input_tab_wrapper.set_hexpand(true);
+        input_tab_wrapper.set_vexpand(true);
+        input_tab_wrapper.add(&input_tab);
+
         tabs_container.append_page(&variable_tab_wrapper, Some(&Label::new(Some("Variables"))));
+        tabs_container.append_page(&input_tab_wrapper, Some(&Label::new(Some("Inputs"))));
 
         root.add(&header);
         root.add(&tabs_container);
 
         if available_filters.contains_key(&model.config.filter) {
-            let filter = available_filters
+            let filter_config = available_filters
                 .get(&model.config.filter)
                 .unwrap()
                 .1
@@ -525,7 +556,9 @@ impl Widget for RenderStageConfigView {
 
             filter_chooser.set_active_id(Some(&model.config.filter));
 
-            for input_name in &filter.inputs {
+            let mut input_name_list = filter_config.inputs.clone();
+            input_name_list.sort();
+            for input_name in &input_name_list {
                 let input_value = if let Some(input_value) = model.config.inputs.get(input_name) {
                     input_value.clone()
                 } else {
@@ -546,17 +579,40 @@ impl Widget for RenderStageConfigView {
                 );
             }
 
-            for (variable_name, variable_value) in &filter.variables {
+            let mut variable_name_list: Vec<String> =
+                filter_config.variables.keys().map(String::clone).collect();
+            variable_name_list.sort();
+
+            for (variable_index, variable_name) in variable_name_list.iter().enumerate() {
+                let (default_value, value_range) =
+                    filter_config.variables.get(variable_name).unwrap();
                 let variable_value =
                     if let Some(stage_variable_value) = model.config.variables.get(variable_name) {
                         stage_variable_value
                     } else {
-                        variable_value
+                        default_value
                     };
-                let variable_wrapper =
-                    variable::build_variable_row(relm, &variable_name, &variable_value);
+                let variable_wrapper = variable::build_variable_row(
+                    relm,
+                    &variable_name,
+                    &variable_value,
+                    &value_range,
+                );
 
-                variable_list_container.add(&variable_wrapper);
+                let variable_name_label = Label::new(Some(variable_name));
+                variable_name_label.set_xalign(0.0);
+                //variable_name_label.set_hexpand;
+
+                variable_list_container.attach(
+                    &variable_name_label,
+                    0,
+                    variable_index as i32,
+                    1,
+                    1,
+                );
+                variable_list_container.attach(&variable_wrapper, 1, variable_index as i32, 1, 1);
+
+                //variable_list_container.add(&variable_wrapper);
             }
         }
 

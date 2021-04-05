@@ -1,6 +1,6 @@
 [package]
 name = "wvr-launcher"
-version = "0.1.4"
+version = "0.1.6"
 authors = ["gurke.club <contact@gurke.club>"]
 edition = "2018"
 

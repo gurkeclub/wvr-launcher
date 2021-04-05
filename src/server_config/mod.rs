@@ -1,7 +1,7 @@
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    Adjustment, ContainerExt, EditableSignals, Entry, EntryExt, Label, SpinButton, SpinButtonExt,
-    Switch, SwitchExt, WidgetExt,
+    Adjustment, ContainerExt, EditableSignals, Entry, EntryExt, Label, SpinButton, Switch,
+    SwitchExt, WidgetExt,
 };
 
 use relm::{connect, Relm};
@@ -55,7 +55,11 @@ pub fn build_view(relm: &Relm<crate::Win>, server_config: &ServerConfig) -> gtk:
         relm,
         width_spin_button,
         connect_changed(val),
-        Some(Msg::SetServerPort(val.get_value() as i64))
+        if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
+            Some(Msg::SetServerPort(value as i64))
+        } else {
+            None
+        }
     );
 
     port_row.add(&Label::new(Some("Listening port: ")));

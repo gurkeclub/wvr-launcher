@@ -1,6 +1,6 @@
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    Adjustment, ContainerExt, EditableSignals, Label, SpinButton, SpinButtonExt, Switch, SwitchExt,
+    Adjustment, ContainerExt, EditableSignals, EntryExt, Label, SpinButton, Switch, SwitchExt,
     WidgetExt,
 };
 
@@ -29,7 +29,11 @@ pub fn build_view(relm: &Relm<crate::Win>, bpm: f64, view_config: &ViewConfig) -
         relm,
         bpm_spin_button,
         connect_changed(val),
-        Some(Msg::SetBPM(val.get_value()))
+        if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
+            Some(Msg::SetBPM(value))
+        } else {
+            None
+        }
     );
 
     bpm_row.add(&Label::new(Some("Bpm: ")));
@@ -58,7 +62,11 @@ pub fn build_view(relm: &Relm<crate::Win>, bpm: f64, view_config: &ViewConfig) -
         relm,
         width_spin_button,
         connect_changed(val),
-        Some(Msg::SetWidth(val.get_value() as i64))
+        if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
+            Some(Msg::SetWidth(value as i64))
+        } else {
+            None
+        }
     );
 
     width_row.add(&Label::new(Some("Width: ")));
@@ -87,7 +95,11 @@ pub fn build_view(relm: &Relm<crate::Win>, bpm: f64, view_config: &ViewConfig) -
         relm,
         height_spin_button,
         connect_changed(val),
-        Some(Msg::SetHeight(val.get_value() as i64))
+        if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
+            Some(Msg::SetHeight(value as i64))
+        } else {
+            None
+        }
     );
 
     height_row.add(&Label::new(Some("Height: ")));
@@ -192,7 +204,11 @@ pub fn build_view(relm: &Relm<crate::Win>, bpm: f64, view_config: &ViewConfig) -
         relm,
         target_fps_spin_button,
         connect_changed(val),
-        Some(Msg::SetTargetFps(val.get_value() as f64))
+        if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
+            Some(Msg::SetTargetFps(value))
+        } else {
+            None
+        }
     );
 
     let locked_speed_switch = Switch::new();
