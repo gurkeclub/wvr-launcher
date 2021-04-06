@@ -1,8 +1,6 @@
 use gtk::prelude::{GtkListStoreExtManual, TreeSortableExtManual};
 use gtk::Orientation::Horizontal;
-use gtk::{
-    ComboBoxExt, ComboBoxText, ContainerExt, Label, LabelExt, SortColumn, SortType, WidgetExt,
-};
+use gtk::{ComboBoxExt, ComboBoxText, ContainerExt, SortColumn, SortType, WidgetExt};
 
 use relm::{connect, Relm};
 
@@ -13,20 +11,9 @@ use super::{RenderStageConfigView, RenderStageConfigViewMsg};
 pub fn build_input_row(
     relm: &Relm<RenderStageConfigView>,
     input_choice_list: &[String],
-    uniform_name: &str,
     input_value: &SampledInput,
 ) -> (gtk::Box, ComboBoxText, ComboBoxText) {
-    let outer_wrapper = gtk::Box::new(Horizontal, 2);
-
-    let wrapper = gtk::Box::new(Horizontal, 2);
-    wrapper.set_property_margin(4);
-
-    let uniform_name_label = Label::new(Some(uniform_name));
-    uniform_name_label.set_xalign(0.0);
-    uniform_name_label.set_size_request(48, 0);
-
-    let padding = gtk::Box::new(Horizontal, 0);
-    padding.set_hexpand(true);
+    let outer_wrapper = gtk::Box::new(Horizontal, 8);
 
     let input_type_store = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
     for name in ["Linear", "Nearest", "Mipmaps"].iter() {
@@ -49,6 +36,7 @@ pub fn build_input_row(
     input_name_store.set_default_sort_func(&super::list_store_sort_function);
 
     let input_name_chooser = gtk::ComboBoxText::new();
+    input_name_chooser.set_hexpand(true);
     input_name_chooser.set_model(Some(&input_name_store));
 
     input_name_chooser.set_id_column(0);
@@ -89,12 +77,8 @@ pub fn build_input_row(
         );
     }
 
-    wrapper.add(&uniform_name_label);
-    wrapper.add(&padding);
-    wrapper.add(&input_type_chooser);
-    wrapper.add(&input_name_chooser);
-
-    outer_wrapper.add(&wrapper);
+    outer_wrapper.add(&input_name_chooser);
+    outer_wrapper.add(&input_type_chooser);
 
     (outer_wrapper, input_type_chooser, input_name_chooser)
 }

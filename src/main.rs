@@ -11,21 +11,28 @@ use std::process::Command;
 use anyhow::Result;
 use uuid::Uuid;
 
-use gtk::prelude::NotebookExtManual;
-use gtk::prelude::WidgetExtManual;
+use glib::Cast;
+
+use gtk::prelude::{
+    GtkListStoreExtManual, NotebookExtManual, TreeSortableExtManual, WidgetExtManual,
+};
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    Button, ButtonExt, ContainerExt, GtkWindowExt, Inhibit, Label, Notebook, NotebookExt,
-    WidgetExt, Window, WindowType,
+    Button, ButtonExt, ComboBoxExt, ComboBoxText, ContainerExt, GtkListStoreExt, GtkWindowExt,
+    Inhibit, Label, Notebook, NotebookExt, SortColumn, SortType, WidgetExt, Window, WindowType,
 };
 
-use relm::{connect, Component, ContainerWidget, Relm, Update, Widget};
+use relm::{connect, Component, Relm, Update, Widget};
 use relm_derive::Msg;
 
 use nfd2::Response;
 
+use strsim::levenshtein;
+
 use wvr_data::config::project_config::ProjectConfig;
-use wvr_data::config::project_config::{BufferPrecision, InputConfig, RenderStageConfig, Speed};
+use wvr_data::config::project_config::{
+    BufferPrecision, InputConfig, RenderStageConfig, SampledInput, Speed,
+};
 
 mod input_config;
 mod server_config;
@@ -72,6 +79,9 @@ pub enum Msg {
     UpdateRenderStageConfig(Uuid, RenderStageConfig),
     RemoveRenderStage(Uuid),
 
+    UpdateRenderedTextureSampling,
+    UpdateRenderedTextureName,
+
     Quit,
     Save,
     Start,
@@ -103,8 +113,8 @@ pub struct Win {
     >,
     render_stage_order: Vec<Uuid>,
 
-    final_stage_id: Uuid,
-    final_stage_widget: Component<RenderStageConfigView>,
+    renderered_stage_type_chooser: ComboBoxText,
+    renderered_stage_name_chooser: ComboBoxText,
 
     relm: Relm<Self>,
 }
@@ -375,9 +385,7 @@ impl Update for Win {
                 render_chain_changed = true;
             }
             Msg::UpdateRenderStageConfig(id, new_config) => {
-                if id == self.final_stage_id {
-                    self.model.config.final_stage = new_config;
-                } else if let Some((ref mut config, _, render_stage_config_view_wrapper)) =
+                if let Some((ref mut config, _, render_stage_config_view_wrapper)) =
                     self.render_stage_config_widget_list.get_mut(&id)
                 {
                     self.render_stage_config_list_container.set_tab_label_text(
@@ -389,6 +397,38 @@ impl Update for Win {
                 }
 
                 render_chain_changed = true;
+            }
+
+            Msg::UpdateRenderedTextureName | Msg::UpdateRenderedTextureSampling => {
+                self.model.config.final_stage.inputs.insert(
+                    "iChannel0".to_string(),
+                    match self
+                        .renderered_stage_type_chooser
+                        .get_active_id()
+                        .unwrap()
+                        .as_str()
+                    {
+                        "Linear" => SampledInput::Linear(
+                            self.renderered_stage_name_chooser
+                                .get_active_id()
+                                .unwrap_or_else(|| glib::GString::from(""))
+                                .to_string(),
+                        ),
+                        "Nearest" => SampledInput::Nearest(
+                            self.renderered_stage_name_chooser
+                                .get_active_id()
+                                .unwrap_or_else(|| glib::GString::from(""))
+                                .to_string(),
+                        ),
+                        "Mipmaps" => SampledInput::Mipmaps(
+                            self.renderered_stage_name_chooser
+                                .get_active_id()
+                                .unwrap_or_else(|| glib::GString::from(""))
+                                .to_string(),
+                        ),
+                        _ => unreachable!(),
+                    },
+                );
             }
         }
 
@@ -421,10 +461,37 @@ impl Update for Win {
                 ));
             }
 
-            self.final_stage_widget
-                .emit(RenderStageConfigViewMsg::UpdateInputChoiceList(
-                    input_choice_list,
-                ));
+            let current_id = if let Some(id) = self.renderered_stage_name_chooser.get_active_id() {
+                id.to_string()
+            } else {
+                input_choice_list[0].clone()
+            };
+
+            // Update input choice for rendered texture chooser
+            let mut closest_id = input_choice_list[0].clone();
+            let mut closest_id_distance = levenshtein(&current_id, &closest_id);
+
+            let input_name_store = self
+                .renderered_stage_name_chooser
+                .get_model()
+                .unwrap()
+                .downcast::<gtk::ListStore>()
+                .unwrap();
+            input_name_store.clear();
+
+            for name in &input_choice_list {
+                input_name_store.insert_with_values(None, &[0, 1], &[name, name]);
+
+                let candidate_id_distance = levenshtein(&current_id, &name);
+
+                if candidate_id_distance < closest_id_distance {
+                    closest_id = name.clone();
+                    closest_id_distance = candidate_id_distance;
+                }
+            }
+
+            self.renderered_stage_name_chooser
+                .set_active_id(Some(&closest_id));
         }
     }
 }
@@ -445,7 +512,6 @@ impl Widget for Win {
         let window = gtk::Window::new(WindowType::Toplevel);
         window.set_size_request(960, 540);
         window.set_title("wvr launcher");
-        //window.set_border_width(10);
         window.set_position(gtk::WindowPosition::Center);
 
         let window_container = gtk::Box::new(Vertical, 0);
@@ -466,6 +532,83 @@ impl Widget for Win {
             &model.config.inputs,
         );
 
+        let render_stage_panel = gtk::Box::new(Vertical, 4);
+
+        // Building the row allowing selection of the texture to render
+        let final_stage_row = gtk::Box::new(Horizontal, 8);
+        final_stage_row.set_property_margin(8);
+
+        let final_stage_label = Label::new(Some("Displayed stage"));
+
+        let renderered_stage_type_store =
+            gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
+        for name in ["Linear", "Nearest", "Mipmaps"].iter() {
+            renderered_stage_type_store.insert_with_values(None, &[0, 1], &[name, name]);
+        }
+        renderered_stage_type_store.set_sort_column_id(SortColumn::Index(0), SortType::Ascending);
+        renderered_stage_type_store.set_default_sort_func(&stage_config::list_store_sort_function);
+
+        let renderered_stage_type_chooser = gtk::ComboBoxText::new();
+        renderered_stage_type_chooser.set_model(Some(&renderered_stage_type_store));
+
+        renderered_stage_type_chooser.set_id_column(0);
+        renderered_stage_type_chooser.set_entry_text_column(1);
+
+        let input_name_store = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
+        for name in &get_input_choice_list(&model.config) {
+            input_name_store.insert_with_values(None, &[0, 1], &[name, name]);
+        }
+        input_name_store.set_sort_column_id(SortColumn::Index(0), SortType::Ascending);
+        input_name_store.set_default_sort_func(&stage_config::list_store_sort_function);
+
+        let renderered_stage_name_chooser = gtk::ComboBoxText::new();
+        renderered_stage_name_chooser.set_hexpand(true);
+        renderered_stage_name_chooser.set_model(Some(&input_name_store));
+
+        renderered_stage_name_chooser.set_id_column(0);
+        renderered_stage_name_chooser.set_entry_text_column(1);
+
+        match model.config.final_stage.inputs.values().next().unwrap() {
+            SampledInput::Linear(input_name) => {
+                renderered_stage_type_chooser.set_active_id(Some("Linear"));
+                renderered_stage_name_chooser.set_active_id(Some(input_name));
+            }
+
+            SampledInput::Nearest(input_name) => {
+                renderered_stage_type_chooser.set_active_id(Some("Nearest"));
+                renderered_stage_name_chooser.set_active_id(Some(input_name));
+            }
+            SampledInput::Mipmaps(input_name) => {
+                renderered_stage_type_chooser.set_active_id(Some("Mipmaps"));
+                renderered_stage_name_chooser.set_active_id(Some(input_name));
+            }
+        }
+        {
+            let renderered_stage_type_chooser = renderered_stage_type_chooser.clone();
+            connect!(
+                relm,
+                renderered_stage_type_chooser,
+                connect_changed(_),
+                Some(Msg::UpdateRenderedTextureSampling)
+            );
+        }
+
+        {
+            let renderered_stage_name_chooser = renderered_stage_name_chooser.clone();
+            connect!(
+                relm,
+                renderered_stage_name_chooser,
+                connect_changed(_),
+                Some(Msg::UpdateRenderedTextureName)
+            );
+        }
+
+        final_stage_row.add(&final_stage_label);
+        final_stage_row.add(&renderered_stage_name_chooser);
+        final_stage_row.add(&renderered_stage_type_chooser);
+
+        render_stage_panel.add(&final_stage_row);
+
         let render_stage_config_list_container = stage_config::build_list_view(
             relm,
             &model.project_path,
@@ -475,25 +618,12 @@ impl Widget for Win {
             &mut render_stage_order,
         );
 
-        let final_stage_panel = gtk::Box::new(Vertical, 0);
-        let final_stage_id = Uuid::new_v4();
-        let final_stage_widget = final_stage_panel
-            .add_widget::<stage_config::RenderStageConfigView>((
-                final_stage_id,
-                model.project_path.clone(),
-                model.config.final_stage.clone(),
-                get_input_choice_list(&model.config),
-                relm.clone(),
-            ));
+        render_stage_panel.add(&render_stage_config_list_container);
 
         tabs_container.append_page(&view_config_widget, Some(&Label::new(Some("General"))));
         tabs_container.append_page(&server_config_panel, Some(&Label::new(Some("Server"))));
         tabs_container.append_page(&input_list_panel, Some(&Label::new(Some("Inputs"))));
-        tabs_container.append_page(
-            &render_stage_config_list_container,
-            Some(&Label::new(Some("Render chain"))),
-        );
-        tabs_container.append_page(&final_stage_panel, Some(&Label::new(Some("Final stage"))));
+        tabs_container.append_page(&render_stage_panel, Some(&Label::new(Some("Render chain"))));
 
         tabs_container
             .get_tab_label(&view_config_widget)
@@ -510,9 +640,9 @@ impl Widget for Win {
             .unwrap()
             .set_tooltip_text(Some("Configure inputs."));
         tabs_container
-            .get_tab_label(&render_stage_config_list_container)
+            .get_tab_label(&render_stage_panel)
             .unwrap()
-            .set_tooltip_text(Some("Configure the render chain stages."));
+            .set_tooltip_text(Some("Configure the render chain."));
 
         let control_container = gtk::Box::new(Horizontal, 8);
         control_container.set_property_margin(8);
@@ -557,8 +687,8 @@ impl Widget for Win {
             render_stage_config_widget_list,
             render_stage_order,
 
-            final_stage_id,
-            final_stage_widget,
+            renderered_stage_type_chooser,
+            renderered_stage_name_chooser,
 
             relm: relm.clone(),
         }

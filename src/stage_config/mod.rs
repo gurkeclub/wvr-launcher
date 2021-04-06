@@ -135,16 +135,16 @@ pub struct RenderStageConfigView {
     relm: Relm<Self>,
     root: gtk::Box,
 
-    input_list_container: gtk::Box,
-    input_widget_list: HashMap<String, (gtk::Box, ComboBoxText, ComboBoxText)>,
+    input_list_container: Grid,
+    input_widget_list: HashMap<String, (ComboBoxText, ComboBoxText)>,
 
     variable_list_container: Grid,
 }
+
 impl RenderStageConfigView {
     pub fn update_input_list(&mut self) {
         self.model.config.inputs.clear();
-        for (input_name, (_, input_type_entry, input_name_chooser)) in self.input_widget_list.iter()
-        {
+        for (input_name, (input_type_entry, input_name_chooser)) in self.input_widget_list.iter() {
             self.model.config.inputs.insert(
                 input_name.clone(),
                 match input_type_entry.get_active_id().unwrap().as_str() {
@@ -179,7 +179,7 @@ impl RenderStageConfigView {
     pub fn update_input_choice_list(&mut self, input_choice_list: &[String]) {
         self.model.input_choice_list = input_choice_list.to_vec();
 
-        for (_, (_, _, input_name_chooser)) in self.input_widget_list.iter() {
+        for (_, (_, input_name_chooser)) in self.input_widget_list.iter() {
             let current_id = if let Some(id) = input_name_chooser.get_active_id() {
                 id.to_string()
             } else {
@@ -228,27 +228,28 @@ impl RenderStageConfigView {
 
             let mut uniform_name_list = filter_config.inputs.clone();
             uniform_name_list.sort();
-            for uniform_name in &uniform_name_list {
+            for (input_index, uniform_name) in uniform_name_list.iter().enumerate() {
                 let input_value = old_inputs.get(uniform_name).unwrap_or(&default_input);
 
+                let input_name_label = Label::new(Some(uniform_name));
+                input_name_label.set_xalign(0.0);
+
                 let (input_wrapper, input_type_chooser, input_name_chooser) =
-                    input::build_input_row(
-                        &self.relm,
-                        &self.model.input_choice_list,
-                        uniform_name,
-                        &input_value,
-                    );
+                    input::build_input_row(&self.relm, &self.model.input_choice_list, &input_value);
 
                 self.model
                     .config
                     .inputs
                     .insert(uniform_name.clone(), input_value.clone());
 
-                self.input_list_container.add(&input_wrapper);
+                self.input_list_container
+                    .attach(&input_name_label, 0, input_index as i32, 1, 1);
+                self.input_list_container
+                    .attach(&input_wrapper, 1, input_index as i32, 1, 1);
 
                 self.input_widget_list.insert(
                     uniform_name.clone(),
-                    (input_wrapper, input_type_chooser, input_name_chooser),
+                    (input_type_chooser, input_name_chooser),
                 );
             }
 
@@ -513,8 +514,8 @@ impl Widget for RenderStageConfigView {
         variable_tab.set_property_margin(8);
 
         let variable_list_container = gtk::Grid::new();
-        variable_list_container.set_row_spacing(8);
-        variable_list_container.set_column_spacing(4);
+        variable_list_container.set_row_spacing(16);
+        variable_list_container.set_column_spacing(8);
         variable_list_container.set_orientation(Orientation::Vertical);
 
         variable_tab.add(&variable_list_container);
@@ -530,7 +531,10 @@ impl Widget for RenderStageConfigView {
         let input_tab = gtk::Box::new(Vertical, 0);
         input_tab.set_property_margin(8);
 
-        let input_list_container = gtk::Box::new(Orientation::Vertical, 8);
+        let input_list_container = gtk::Grid::new();
+        input_list_container.set_row_spacing(16);
+        input_list_container.set_column_spacing(8);
+        input_list_container.set_orientation(Orientation::Vertical);
 
         input_tab.add(&input_list_container);
 
@@ -558,25 +562,25 @@ impl Widget for RenderStageConfigView {
 
             let mut input_name_list = filter_config.inputs.clone();
             input_name_list.sort();
-            for input_name in &input_name_list {
+            for (input_index, input_name) in input_name_list.iter().enumerate() {
                 let input_value = if let Some(input_value) = model.config.inputs.get(input_name) {
                     input_value.clone()
                 } else {
                     SampledInput::Linear("".to_string())
                 };
 
-                let (input_wrapper, input_type_entry, input_value_entry) = input::build_input_row(
-                    relm,
-                    &model.input_choice_list,
-                    &input_name,
-                    &input_value,
-                );
+                let input_name_label = Label::new(Some(input_name));
+                input_name_label.set_xalign(0.0);
+
+                let (input_wrapper, input_type_entry, input_value_entry) =
+                    input::build_input_row(relm, &model.input_choice_list, &input_value);
 
                 input_list_container.add(&input_wrapper);
-                input_widget_list.insert(
-                    input_name.clone(),
-                    (input_wrapper, input_type_entry, input_value_entry),
-                );
+
+                input_list_container.attach(&input_name_label, 0, input_index as i32, 1, 1);
+                input_list_container.attach(&input_wrapper, 1, input_index as i32, 1, 1);
+
+                input_widget_list.insert(input_name.clone(), (input_type_entry, input_value_entry));
             }
 
             let mut variable_name_list: Vec<String> =
