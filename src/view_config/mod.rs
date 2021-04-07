@@ -30,7 +30,7 @@ pub fn build_view(relm: &Relm<crate::Win>, bpm: f64, view_config: &ViewConfig) -
         bpm_spin_button,
         connect_changed(val),
         if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-            Some(Msg::SetBPM(value))
+            Some(Msg::SetBpm(value))
         } else {
             None
         }

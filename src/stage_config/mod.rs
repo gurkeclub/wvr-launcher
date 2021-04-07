@@ -135,10 +135,8 @@ pub struct RenderStageConfigView {
     relm: Relm<Self>,
     root: gtk::Box,
 
-    input_list_container: Grid,
+    filter_config_container: Grid,
     input_widget_list: HashMap<String, (ComboBoxText, ComboBoxText)>,
-
-    variable_list_container: Grid,
 }
 
 impl RenderStageConfigView {
@@ -221,9 +219,11 @@ impl RenderStageConfigView {
 
             self.model.config.inputs.clear();
             self.input_widget_list.clear();
-            for children in &self.input_list_container.get_children() {
-                self.input_list_container.remove(children);
+
+            for children in &self.filter_config_container.get_children() {
+                self.filter_config_container.remove(children);
             }
+
             let default_input = SampledInput::Linear(self.model.input_choice_list[0].clone());
 
             let mut uniform_name_list = filter_config.inputs.clone();
@@ -242,9 +242,9 @@ impl RenderStageConfigView {
                     .inputs
                     .insert(uniform_name.clone(), input_value.clone());
 
-                self.input_list_container
+                self.filter_config_container
                     .attach(&input_name_label, 0, input_index as i32, 1, 1);
-                self.input_list_container
+                self.filter_config_container
                     .attach(&input_wrapper, 1, input_index as i32, 1, 1);
 
                 self.input_widget_list.insert(
@@ -253,14 +253,9 @@ impl RenderStageConfigView {
                 );
             }
 
-            self.input_list_container.show_all();
-
             let old_variables = self.model.config.variables.clone();
 
             self.model.config.variables.clear();
-            for children in &self.variable_list_container.get_children() {
-                self.variable_list_container.remove(children);
-            }
 
             let mut variable_name_list: Vec<String> =
                 filter_config.variables.keys().map(String::clone).collect();
@@ -281,17 +276,17 @@ impl RenderStageConfigView {
                 let variable_name_label = Label::new(Some(variable_name));
                 variable_name_label.set_xalign(0.0);
 
-                self.variable_list_container.attach(
+                self.filter_config_container.attach(
                     &variable_name_label,
                     0,
-                    variable_index as i32,
+                    (uniform_name_list.len() + variable_index) as i32,
                     1,
                     1,
                 );
-                self.variable_list_container.attach(
+                self.filter_config_container.attach(
                     &variable_wrapper,
                     1,
-                    variable_index as i32,
+                    (uniform_name_list.len() + variable_index) as i32,
                     1,
                     1,
                 );
@@ -302,7 +297,7 @@ impl RenderStageConfigView {
                     .insert(variable_name.clone(), variable_value.clone());
             }
 
-            self.variable_list_container.show_all();
+            self.filter_config_container.show_all();
         }
     }
 }
@@ -381,15 +376,24 @@ impl Widget for RenderStageConfigView {
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
         let mut input_widget_list = HashMap::new();
 
-        let root = gtk::Box::new(Vertical, 4);
+        let root = gtk::Box::new(Vertical, 16);
+        root.set_property_margin(8);
 
         let header = gtk::Box::new(Horizontal, 4);
-        header.set_property_margin(8);
 
-        let base_config = gtk::Box::new(Vertical, 4);
+        let base_config = gtk::Grid::new();
+        base_config.set_hexpand(true);
+        base_config.set_row_spacing(4);
+        base_config.set_column_spacing(8);
+        base_config.set_orientation(Orientation::Vertical);
 
         // Building of the input name row
+
+        let name_label = Label::new(Some("Name: "));
+        name_label.set_xalign(0.0);
+
         let name_entry = Entry::new();
+        name_entry.set_hexpand(true);
         name_entry.set_text(&model.config.name);
         connect!(
             relm,
@@ -401,11 +405,9 @@ impl Widget for RenderStageConfigView {
         );
 
         // Building of the filter selection row
-        let filter_row = gtk::Box::new(Horizontal, 8);
 
         let filter_label = Label::new(Some("Filter: "));
         filter_label.set_xalign(0.0);
-        filter_label.set_size_request(48, 0);
 
         let available_filters = load_available_filter_list(&model.project_path).unwrap();
         let filter_store = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
@@ -415,6 +417,7 @@ impl Widget for RenderStageConfigView {
         filter_store.set_sort_column_id(SortColumn::Index(0), SortType::Ascending);
 
         let filter_chooser = gtk::ComboBoxText::new();
+        filter_chooser.set_hexpand(true);
         filter_chooser.set_model(Some(&filter_store));
 
         filter_chooser.set_id_column(0);
@@ -432,19 +435,9 @@ impl Widget for RenderStageConfigView {
             );
         }
 
-        let filter_row_padding = gtk::Box::new(Horizontal, 0);
-        filter_row_padding.set_hexpand(true);
-
-        filter_row.add(&filter_label);
-        filter_row.add(&filter_row_padding);
-        filter_row.add(&filter_chooser);
-
         // Building of the precision selection row
-        let precision_row = gtk::Box::new(Horizontal, 8);
-
         let precision_label = Label::new(Some("Precision: "));
         precision_label.set_xalign(0.0);
-        precision_label.set_size_request(48, 0);
 
         let available_precisions = ["U8", "F16", "F32"];
         let precision_store = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
@@ -455,6 +448,7 @@ impl Widget for RenderStageConfigView {
         precision_store.set_default_sort_func(&list_store_sort_function);
 
         let precision_chooser = gtk::ComboBoxText::new();
+        precision_chooser.set_hexpand(true);
         precision_chooser.set_model(Some(&precision_store));
 
         precision_chooser.set_id_column(0);
@@ -478,16 +472,14 @@ impl Widget for RenderStageConfigView {
             );
         }
 
-        let precision_row_padding = gtk::Box::new(Horizontal, 0);
-        precision_row_padding.set_hexpand(true);
+        base_config.attach(&name_label, 0, 0, 1, 1);
+        base_config.attach(&name_entry, 1, 0, 1, 1);
 
-        precision_row.add(&precision_label);
-        precision_row.add(&precision_row_padding);
-        precision_row.add(&precision_chooser);
+        base_config.attach(&filter_label, 0, 1, 1, 1);
+        base_config.attach(&filter_chooser, 1, 1, 1, 1);
 
-        base_config.add(&name_entry);
-        base_config.add(&filter_row);
-        base_config.add(&precision_row);
+        base_config.attach(&precision_label, 0, 2, 1, 1);
+        base_config.attach(&precision_chooser, 1, 2, 1, 1);
 
         let remove_button = Button::new();
         remove_button.set_label("Delete");
@@ -504,52 +496,12 @@ impl Widget for RenderStageConfigView {
         header.add(&base_config);
         header.add(&remove_button);
 
-        // Building of a container for the inputs and variables configuration
-        let tabs_container = Notebook::new();
-        tabs_container.set_tab_pos(gtk::PositionType::Left);
-        tabs_container.set_show_border(false);
+        let filter_config_panel = gtk::Box::new(Vertical, 16);
 
-        // Begin of variable list composition panel
-        let variable_tab = gtk::Box::new(Vertical, 0);
-        variable_tab.set_property_margin(8);
-
-        let variable_list_container = gtk::Grid::new();
-        variable_list_container.set_row_spacing(16);
-        variable_list_container.set_column_spacing(8);
-        variable_list_container.set_orientation(Orientation::Vertical);
-
-        variable_tab.add(&variable_list_container);
-
-        let variable_tab_wrapper = ScrolledWindow::new::<Adjustment, Adjustment>(None, None);
-
-        variable_tab_wrapper.set_policy(PolicyType::Never, PolicyType::Automatic);
-        variable_tab_wrapper.set_hexpand(true);
-        variable_tab_wrapper.set_vexpand(true);
-        variable_tab_wrapper.add(&variable_tab);
-
-        // Begin of input list composition panel
-        let input_tab = gtk::Box::new(Vertical, 0);
-        input_tab.set_property_margin(8);
-
-        let input_list_container = gtk::Grid::new();
-        input_list_container.set_row_spacing(16);
-        input_list_container.set_column_spacing(8);
-        input_list_container.set_orientation(Orientation::Vertical);
-
-        input_tab.add(&input_list_container);
-
-        let input_tab_wrapper = ScrolledWindow::new::<Adjustment, Adjustment>(None, None);
-        //input_tab_wrapper.set_size_request(320, 240);
-        input_tab_wrapper.set_policy(PolicyType::Never, PolicyType::Automatic);
-        input_tab_wrapper.set_hexpand(true);
-        input_tab_wrapper.set_vexpand(true);
-        input_tab_wrapper.add(&input_tab);
-
-        tabs_container.append_page(&variable_tab_wrapper, Some(&Label::new(Some("Variables"))));
-        tabs_container.append_page(&input_tab_wrapper, Some(&Label::new(Some("Inputs"))));
-
-        root.add(&header);
-        root.add(&tabs_container);
+        let filter_config_container = gtk::Grid::new();
+        filter_config_container.set_row_spacing(4);
+        filter_config_container.set_column_spacing(8);
+        filter_config_container.set_orientation(Orientation::Vertical);
 
         if available_filters.contains_key(&model.config.filter) {
             let filter_config = available_filters
@@ -575,10 +527,10 @@ impl Widget for RenderStageConfigView {
                 let (input_wrapper, input_type_entry, input_value_entry) =
                     input::build_input_row(relm, &model.input_choice_list, &input_value);
 
-                input_list_container.add(&input_wrapper);
+                filter_config_container.add(&input_wrapper);
 
-                input_list_container.attach(&input_name_label, 0, input_index as i32, 1, 1);
-                input_list_container.attach(&input_wrapper, 1, input_index as i32, 1, 1);
+                filter_config_container.attach(&input_name_label, 0, input_index as i32, 1, 1);
+                filter_config_container.attach(&input_wrapper, 1, input_index as i32, 1, 1);
 
                 input_widget_list.insert(input_name.clone(), (input_type_entry, input_value_entry));
             }
@@ -605,30 +557,43 @@ impl Widget for RenderStageConfigView {
 
                 let variable_name_label = Label::new(Some(variable_name));
                 variable_name_label.set_xalign(0.0);
-                //variable_name_label.set_hexpand;
 
-                variable_list_container.attach(
+                filter_config_container.attach(
                     &variable_name_label,
                     0,
-                    variable_index as i32,
+                    (input_name_list.len() + variable_index) as i32,
                     1,
                     1,
                 );
-                variable_list_container.attach(&variable_wrapper, 1, variable_index as i32, 1, 1);
-
-                //variable_list_container.add(&variable_wrapper);
+                filter_config_container.attach(
+                    &variable_wrapper,
+                    1,
+                    (input_name_list.len() + variable_index) as i32,
+                    1,
+                    1,
+                );
             }
         }
+
+        filter_config_panel.add(&filter_config_container);
+
+        let filter_config_wrapper = ScrolledWindow::new::<Adjustment, Adjustment>(None, None);
+
+        filter_config_wrapper.set_policy(PolicyType::Never, PolicyType::Automatic);
+        filter_config_wrapper.set_hexpand(true);
+        filter_config_wrapper.set_vexpand(true);
+        filter_config_wrapper.add(&filter_config_panel);
+
+        root.add(&header);
+        root.add(&filter_config_wrapper);
 
         Self {
             relm: relm.clone(),
             model,
             root,
 
-            input_list_container,
+            filter_config_container,
             input_widget_list,
-
-            variable_list_container,
         }
     }
 }

@@ -885,7 +885,7 @@ dependencies = [
 
 [[package]]
 name = "wvr-launcher"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "gdk",

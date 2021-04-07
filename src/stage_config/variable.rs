@@ -92,7 +92,7 @@ fn create_float2_spinner(
             (-1.0, 1.0, 0.0001)
         };
 
-    let components_wrapper = gtk::Box::new(Vertical, 2);
+    let components_wrapper = gtk::Box::new(Vertical, 0);
 
     let x_wrapper = gtk::Box::new(Horizontal, 2);
 
@@ -165,7 +165,7 @@ fn create_float3_spinner(
             (-1.0, 1.0, 0.0001)
         };
 
-    let components_wrapper = gtk::Box::new(Vertical, 2);
+    let components_wrapper = gtk::Box::new(Vertical, 0);
 
     let x_wrapper = gtk::Box::new(Horizontal, 2);
 
@@ -277,7 +277,7 @@ fn create_float4_spinner(
             (-1.0, 1.0, 0.0001)
         };
 
-    let components_wrapper = gtk::Box::new(Vertical, 2);
+    let components_wrapper = gtk::Box::new(Vertical, 0);
 
     let x_wrapper = gtk::Box::new(Horizontal, 2);
 
