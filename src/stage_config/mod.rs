@@ -27,9 +27,9 @@ use relm_derive::Msg;
 use strsim::levenshtein;
 
 use wvr_data::config::project_config::{
-    BufferPrecision, FilterConfig, RenderStageConfig, SampledInput,
+    BufferPrecision, FilterConfig, FilterMode, RenderStageConfig, SampledInput,
 };
-use wvr_data::DataHolder;
+use wvr_data::{DataHolder, DataRange};
 
 pub mod input;
 pub mod variable;
@@ -135,6 +135,9 @@ pub struct RenderStageConfigView {
     relm: Relm<Self>,
     root: gtk::Box,
 
+    filter_mode_params_label: Label,
+    filter_mode_params_container: gtk::Box,
+
     filter_config_container: Grid,
     input_widget_list: HashMap<String, (ComboBoxText, ComboBoxText)>,
 }
@@ -171,7 +174,25 @@ impl RenderStageConfigView {
     }
 
     pub fn update_variable(&mut self, name: &str, value: DataHolder) {
-        self.model.config.variables.insert(name.to_string(), value);
+        if name == "_FILTER_MODE_PARAMS" {
+            match &mut self.model.config.filter_mode_params {
+                FilterMode::Rectangle(x_a, y_a, x_b, y_b) => {
+                    if let DataHolder::Float4(params) = value {
+                        *x_a = params[0];
+                        *y_a = params[1];
+                        *x_b = params[2];
+                        *y_b = params[3];
+                    }
+                }
+                FilterMode::Particles(count) => {
+                    if let DataHolder::Int(new_count) = value {
+                        *count = new_count as usize;
+                    }
+                }
+            }
+        } else {
+            self.model.config.variables.insert(name.to_string(), value);
+        }
     }
 
     pub fn update_input_choice_list(&mut self, input_choice_list: &[String]) {
@@ -215,6 +236,24 @@ impl RenderStageConfigView {
             .unwrap()
             .get(filter_name)
         {
+            self.model.config.filter_mode_params = filter_config.mode.clone();
+
+            self.filter_mode_params_container = match self.model.config.filter_mode_params {
+                FilterMode::Rectangle(_, _, _, _) => {
+                    self.filter_mode_params_label.set_text("");
+                    gtk::Box::new(Horizontal, 0)
+                }
+                FilterMode::Particles(count) => {
+                    self.filter_mode_params_label.set_text("Particle count: ");
+                    variable::create_int_spinner(
+                        &self.relm,
+                        "_FILTER_MODE_PARAMS",
+                        count as i64,
+                        &DataRange::IntRange(1, 1_000_000, 1),
+                    )
+                }
+            };
+
             let old_inputs = self.model.config.inputs.clone();
 
             self.model.config.inputs.clear();
@@ -435,6 +474,26 @@ impl Widget for RenderStageConfigView {
             );
         }
 
+        // Building of the filter_mode_params selection row
+        let filter_mode_params_label = Label::new(None);
+        filter_mode_params_label.set_xalign(0.0);
+
+        let filter_mode_params_container = match model.config.filter_mode_params {
+            FilterMode::Rectangle(_, _, _, _) => {
+                filter_mode_params_label.set_text("");
+                gtk::Box::new(Horizontal, 0)
+            }
+            FilterMode::Particles(count) => {
+                filter_mode_params_label.set_text("Particle count: ");
+                variable::create_int_spinner(
+                    relm,
+                    "_FILTER_MODE_PARAMS",
+                    count as i64,
+                    &DataRange::IntRange(1, 1_000_000, 1),
+                )
+            }
+        };
+
         // Building of the precision selection row
         let precision_label = Label::new(Some("Precision: "));
         precision_label.set_xalign(0.0);
@@ -475,11 +534,14 @@ impl Widget for RenderStageConfigView {
         base_config.attach(&name_label, 0, 0, 1, 1);
         base_config.attach(&name_entry, 1, 0, 1, 1);
 
-        base_config.attach(&filter_label, 0, 1, 1, 1);
-        base_config.attach(&filter_chooser, 1, 1, 1, 1);
+        base_config.attach(&precision_label, 0, 1, 1, 1);
+        base_config.attach(&precision_chooser, 1, 1, 1, 1);
 
-        base_config.attach(&precision_label, 0, 2, 1, 1);
-        base_config.attach(&precision_chooser, 1, 2, 1, 1);
+        base_config.attach(&filter_label, 0, 2, 1, 1);
+        base_config.attach(&filter_chooser, 1, 2, 1, 1);
+
+        base_config.attach(&filter_mode_params_label, 0, 3, 1, 1);
+        base_config.attach(&filter_mode_params_container, 1, 3, 1, 1);
 
         let remove_button = Button::new();
         remove_button.set_label("Delete");
@@ -591,6 +653,9 @@ impl Widget for RenderStageConfigView {
             relm: relm.clone(),
             model,
             root,
+
+            filter_mode_params_label,
+            filter_mode_params_container,
 
             filter_config_container,
             input_widget_list,

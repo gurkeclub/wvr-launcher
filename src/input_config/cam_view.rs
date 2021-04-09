@@ -98,7 +98,11 @@ pub fn build_cam_view(relm: &Relm<InputConfigView>, model: &InputConfigViewModel
             relm,
             width_spin_button,
             connect_changed(val),
-            Some(InputConfigViewMsg::SetWidth(val.get_value() as i64))
+            if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
+                Some(InputConfigViewMsg::SetWidth(value as i64))
+            } else {
+                None
+            }
         );
 
         let height_spin_button = SpinButton::new(
@@ -118,7 +122,11 @@ pub fn build_cam_view(relm: &Relm<InputConfigView>, model: &InputConfigViewModel
             relm,
             height_spin_button,
             connect_changed(val),
-            Some(InputConfigViewMsg::SetHeight(val.get_value() as i64))
+            if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
+                Some(InputConfigViewMsg::SetHeight(value as i64))
+            } else {
+                None
+            }
         );
 
         resolution_row.add(&resolution_label);

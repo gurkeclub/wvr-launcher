@@ -28,7 +28,7 @@ use strsim::levenshtein;
 
 use wvr_data::config::project_config::ProjectConfig;
 use wvr_data::config::project_config::{
-    BufferPrecision, InputConfig, RenderStageConfig, SampledInput, Speed,
+    BufferPrecision, FilterMode, InputConfig, RenderStageConfig, SampledInput, Speed,
 };
 
 use crate::input_config;
@@ -303,11 +303,12 @@ impl Update for Win {
 
             Msg::AddRenderStage => {
                 let render_stage_name = "My render stage";
-                let filter_name = "default_filter";
+                let filter_name = "copy_image";
 
                 let render_stage_config = RenderStageConfig {
                     name: render_stage_name.to_string(),
                     filter: filter_name.to_string(),
+                    filter_mode_params: FilterMode::Rectangle(0.0, 0.0, 0.0, 0.0),
                     inputs: HashMap::new(),
                     variables: HashMap::new(),
                     precision: BufferPrecision::U8,

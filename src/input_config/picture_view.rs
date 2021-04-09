@@ -3,11 +3,11 @@ use std::{
     str::FromStr,
 };
 
-
 use gdk::RGBA;
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    Adjustment, ContainerExt, EditableSignals, Entry, EntryExt, Label, LabelExt, SpinButton,FileChooserAction, FileChooserButton, FileChooserButtonExt, FileChooserExt,
+    Adjustment, ContainerExt, EditableSignals, Entry, EntryExt, FileChooserAction,
+    FileChooserButton, FileChooserButtonExt, FileChooserExt, Label, LabelExt, SpinButton,
     SpinButtonExt, StateFlags, WidgetExt,
 };
 
@@ -18,7 +18,11 @@ use super::InputConfigView;
 use super::InputConfigViewModel;
 use super::InputConfigViewMsg;
 
-pub fn build_picture_view(relm: &Relm<InputConfigView>, project_path: &Path, model: &InputConfigViewModel) -> gtk::Box {
+pub fn build_picture_view(
+    relm: &Relm<InputConfigView>,
+    project_path: &Path,
+    model: &InputConfigViewModel,
+) -> gtk::Box {
     let root = gtk::Box::new(Vertical, 0);
     root.override_background_color(
         StateFlags::NORMAL,
@@ -120,7 +124,11 @@ pub fn build_picture_view(relm: &Relm<InputConfigView>, project_path: &Path, mod
             relm,
             width_spin_button,
             connect_changed(val),
-            Some(InputConfigViewMsg::SetWidth(val.get_value() as i64))
+            if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
+                Some(InputConfigViewMsg::SetWidth(value as i64))
+            } else {
+                None
+            }
         );
 
         let height_spin_button = SpinButton::new(
@@ -140,7 +148,11 @@ pub fn build_picture_view(relm: &Relm<InputConfigView>, project_path: &Path, mod
             relm,
             height_spin_button,
             connect_changed(val),
-            Some(InputConfigViewMsg::SetHeight(val.get_value() as i64))
+            if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
+                Some(InputConfigViewMsg::SetHeight(value as i64))
+            } else {
+                None
+            }
         );
 
         resolution_row.add(&resolution_label);

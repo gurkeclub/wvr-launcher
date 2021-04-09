@@ -13,7 +13,7 @@ use wvr_data::{DataHolder, DataRange};
 
 use super::{RenderStageConfigView, RenderStageConfigViewMsg};
 
-fn create_int_spinner(
+pub fn create_int_spinner(
     relm: &Relm<RenderStageConfigView>,
     name: &str,
     value: i64,
@@ -45,7 +45,7 @@ fn create_int_spinner(
 
     wrapper
 }
-fn create_float_spinner(
+pub fn create_float_spinner(
     relm: &Relm<RenderStageConfigView>,
     name: &str,
     value: f64,
@@ -78,7 +78,7 @@ fn create_float_spinner(
     wrapper
 }
 
-fn create_float2_spinner(
+pub fn create_float2_spinner(
     relm: &Relm<RenderStageConfigView>,
     name: &str,
     x: f64,
@@ -150,7 +150,7 @@ fn create_float2_spinner(
     components_wrapper
 }
 
-fn create_float3_spinner(
+pub fn create_float3_spinner(
     relm: &Relm<RenderStageConfigView>,
     name: &str,
     x: f64,
@@ -261,7 +261,7 @@ fn create_float3_spinner(
     components_wrapper
 }
 
-fn create_float4_spinner(
+pub fn create_float4_spinner(
     relm: &Relm<RenderStageConfigView>,
     name: &str,
     x: f64,
