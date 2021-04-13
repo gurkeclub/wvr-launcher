@@ -8,7 +8,7 @@ use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
     Adjustment, ContainerExt, EditableSignals, Entry, EntryExt, FileChooserAction,
     FileChooserButton, FileChooserButtonExt, FileChooserExt, Label, LabelExt, RadioButton,
-    SpinButton, SpinButtonExt, StateFlags, ToggleButtonExt, WidgetExt,
+    SpinButton, StateFlags, ToggleButtonExt, WidgetExt,
 };
 
 use relm::{connect, Relm};

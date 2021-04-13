@@ -35,7 +35,7 @@ pub mod input;
 pub mod variable;
 
 pub fn build_list_view(
-    relm: &Relm<crate::Win>,
+    relm: &Relm<crate::main_panel::MainPanel>,
     project_path: &Path,
     render_stage_config_list: &[RenderStageConfig],
     input_choice_list: &[String],
@@ -50,12 +50,15 @@ pub fn build_list_view(
     render_stage_order: &mut Vec<Uuid>,
 ) -> Notebook {
     let render_stage_list_container = Notebook::new();
+    render_stage_list_container.set_hexpand(true);
+    render_stage_list_container.set_vexpand(true);
     render_stage_list_container.set_tab_pos(gtk::PositionType::Left);
     render_stage_list_container.set_show_border(false);
     render_stage_list_container.set_scrollable(true);
 
     let add_render_stage_button = Button::new();
     add_render_stage_button.set_label("+");
+    add_render_stage_button.set_property_margin(4);
     connect!(
         relm,
         add_render_stage_button,
@@ -74,8 +77,29 @@ pub fn build_list_view(
             &render_stage_config,
             &input_choice_list,
         );
-        render_stage_list_container
-            .append_page(&wrapper, Some(&Label::new(Some(&render_stage_config.name))));
+        let page_label_container = gtk::Box::new(Horizontal, 4);
+        page_label_container.set_property_margin(0);
+
+        let page_label = Label::new(Some(&render_stage_config.name));
+        page_label.set_xalign(0.0);
+        page_label.set_hexpand(true);
+
+        let remove_button = Button::new();
+        remove_button.set_label("X");
+        {
+            connect!(
+                relm,
+                remove_button,
+                connect_clicked(_),
+                Some(crate::Msg::RemoveRenderStage(id))
+            );
+        }
+
+        page_label_container.add(&remove_button);
+        page_label_container.add(&page_label);
+
+        render_stage_list_container.append_page(&wrapper, Some(&page_label_container));
+        page_label_container.show_all();
 
         render_stage_config_widget_list.insert(
             id,
@@ -93,7 +117,7 @@ pub fn build_list_view(
 }
 
 pub fn build_render_stage_config_row(
-    relm: &Relm<crate::Win>,
+    relm: &Relm<crate::main_panel::MainPanel>,
     project_path: &Path,
     render_stage_config: &RenderStageConfig,
     input_choice_list: &[String],
@@ -124,7 +148,7 @@ pub enum RenderStageConfigViewMsg {
 }
 
 pub struct RenderStageConfigViewModel {
-    parent_relm: Relm<crate::Win>,
+    parent_relm: Relm<crate::main_panel::MainPanel>,
     id: Uuid,
     project_path: PathBuf,
     config: RenderStageConfig,
@@ -196,17 +220,41 @@ impl RenderStageConfigView {
     }
 
     pub fn update_input_choice_list(&mut self, input_choice_list: &[String]) {
-        self.model.input_choice_list = input_choice_list.to_vec();
+        let input_choice_list = input_choice_list.to_vec();
+        if input_choice_list == self.model.input_choice_list {
+            return;
+        }
+
+        self.model.input_choice_list = input_choice_list;
 
         for (_, (_, input_name_chooser)) in self.input_widget_list.iter() {
-            let current_id = if let Some(id) = input_name_chooser.get_active_id() {
-                id.to_string()
-            } else {
-                input_choice_list[0].clone()
-            };
+            let new_id;
 
-            let mut closest_id = input_choice_list[0].clone();
-            let mut closest_id_distance = levenshtein(&current_id, &closest_id);
+            if let Some(current_id) = input_name_chooser.get_active_id() {
+                let current_id = current_id.to_string();
+
+                if let Some(default_id) = self.model.input_choice_list.get(0) {
+                    let mut closest_id = default_id.clone();
+                    let mut closest_id_distance = levenshtein(&current_id, &closest_id);
+
+                    for name in &self.model.input_choice_list {
+                        let candidate_id_distance = levenshtein(&current_id, &name);
+
+                        if candidate_id_distance < closest_id_distance {
+                            closest_id = name.clone();
+                            closest_id_distance = candidate_id_distance;
+                        }
+                    }
+
+                    new_id = Some(closest_id);
+                } else {
+                    new_id = None;
+                }
+            } else if let Some(default_id) = self.model.input_choice_list.get(0) {
+                new_id = Some(default_id.clone());
+            } else {
+                new_id = None;
+            }
 
             let input_name_store = input_name_chooser
                 .get_model()
@@ -215,18 +263,15 @@ impl RenderStageConfigView {
                 .unwrap();
             input_name_store.clear();
 
-            for name in input_choice_list {
+            for name in &self.model.input_choice_list {
                 input_name_store.insert_with_values(None, &[0, 1], &[name, name]);
-
-                let candidate_id_distance = levenshtein(&current_id, &name);
-
-                if candidate_id_distance < closest_id_distance {
-                    closest_id = name.clone();
-                    closest_id_distance = candidate_id_distance;
-                }
             }
 
-            input_name_chooser.set_active_id(Some(&closest_id));
+            if let Some(new_id) = new_id {
+                input_name_chooser.set_active_id(Some(&new_id));
+            } else {
+                input_name_chooser.set_active_id(None);
+            }
         }
     }
 
@@ -348,7 +393,7 @@ impl Update for RenderStageConfigView {
         PathBuf,
         RenderStageConfig,
         Vec<String>,
-        Relm<crate::Win>,
+        Relm<crate::main_panel::MainPanel>,
     );
     type Msg = RenderStageConfigViewMsg;
 
@@ -359,7 +404,7 @@ impl Update for RenderStageConfigView {
             PathBuf,
             RenderStageConfig,
             Vec<String>,
-            Relm<crate::Win>,
+            Relm<crate::main_panel::MainPanel>,
         ),
     ) -> Self::Model {
         RenderStageConfigViewModel {
@@ -415,10 +460,8 @@ impl Widget for RenderStageConfigView {
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
         let mut input_widget_list = HashMap::new();
 
-        let root = gtk::Box::new(Vertical, 16);
+        let root = gtk::Box::new(Vertical, 4);
         root.set_property_margin(8);
-
-        let header = gtk::Box::new(Horizontal, 4);
 
         let base_config = gtk::Grid::new();
         base_config.set_hexpand(true);
@@ -428,8 +471,8 @@ impl Widget for RenderStageConfigView {
 
         // Building of the input name row
 
-        let name_label = Label::new(Some("Name: "));
-        name_label.set_xalign(0.0);
+        //let name_label = Label::new(Some("Name: "));
+        //name_label.set_xalign(0.0);
 
         let name_entry = Entry::new();
         name_entry.set_hexpand(true);
@@ -445,8 +488,8 @@ impl Widget for RenderStageConfigView {
 
         // Building of the filter selection row
 
-        let filter_label = Label::new(Some("Filter: "));
-        filter_label.set_xalign(0.0);
+        //let filter_label = Label::new(Some("Filter: "));
+        //filter_label.set_xalign(0.0);
 
         let available_filters = load_available_filter_list(&model.project_path).unwrap();
         let filter_store = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
@@ -495,8 +538,8 @@ impl Widget for RenderStageConfigView {
         };
 
         // Building of the precision selection row
-        let precision_label = Label::new(Some("Precision: "));
-        precision_label.set_xalign(0.0);
+        //let precision_label = Label::new(Some("Precision: "));
+        //precision_label.set_xalign(0.0);
 
         let available_precisions = ["U8", "F16", "F32"];
         let precision_store = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
@@ -507,7 +550,7 @@ impl Widget for RenderStageConfigView {
         precision_store.set_default_sort_func(&list_store_sort_function);
 
         let precision_chooser = gtk::ComboBoxText::new();
-        precision_chooser.set_hexpand(true);
+        precision_chooser.set_hexpand(false);
         precision_chooser.set_model(Some(&precision_store));
 
         precision_chooser.set_id_column(0);
@@ -531,32 +574,16 @@ impl Widget for RenderStageConfigView {
             );
         }
 
-        base_config.attach(&name_label, 0, 0, 1, 1);
-        base_config.attach(&name_entry, 1, 0, 1, 1);
+        //base_config.attach(&name_label, 0, 0, 1, 1);
+        base_config.attach(&name_entry, 0, 0, 2, 1);
 
-        base_config.attach(&precision_label, 0, 1, 1, 1);
+        //base_config.attach(&filter_label, 0, 2, 1, 1);
+        base_config.attach(&filter_chooser, 0, 1, 1, 1);
+        //base_config.attach(&precision_label, 0, 1, 1, 1);
         base_config.attach(&precision_chooser, 1, 1, 1, 1);
 
-        base_config.attach(&filter_label, 0, 2, 1, 1);
-        base_config.attach(&filter_chooser, 1, 2, 1, 1);
-
-        base_config.attach(&filter_mode_params_label, 0, 3, 1, 1);
-        base_config.attach(&filter_mode_params_container, 1, 3, 1, 1);
-
-        let remove_button = Button::new();
-        remove_button.set_label("Delete");
-        {
-            let id = model.id;
-            connect!(
-                model.parent_relm,
-                remove_button,
-                connect_clicked(_),
-                Some(crate::Msg::RemoveRenderStage(id))
-            );
-        }
-
-        header.add(&base_config);
-        header.add(&remove_button);
+        base_config.attach(&filter_mode_params_label, 0, 2, 1, 1);
+        base_config.attach(&filter_mode_params_container, 1, 2, 1, 1);
 
         let filter_config_panel = gtk::Box::new(Vertical, 16);
 
@@ -646,7 +673,7 @@ impl Widget for RenderStageConfigView {
         filter_config_wrapper.set_vexpand(true);
         filter_config_wrapper.add(&filter_config_panel);
 
-        root.add(&header);
+        root.add(&base_config);
         root.add(&filter_config_wrapper);
 
         Self {

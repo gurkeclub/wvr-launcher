@@ -2,7 +2,7 @@ use gdk::RGBA;
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
     Adjustment, ContainerExt, EditableSignals, Entry, EntryExt, Label, LabelExt, SpinButton,
-    SpinButtonExt, StateFlags, WidgetExt,
+    StateFlags, WidgetExt,
 };
 
 use relm::{connect, Relm};

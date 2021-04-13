@@ -10,7 +10,10 @@ use crate::Msg;
 
 use wvr_data::config::server_config::ServerConfig;
 
-pub fn build_view(relm: &Relm<crate::Win>, server_config: &ServerConfig) -> gtk::Box {
+pub fn build_view(
+    relm: &Relm<crate::main_panel::MainPanel>,
+    server_config: &ServerConfig,
+) -> gtk::Box {
     let view_config_container = gtk::Box::new(Vertical, 4);
     view_config_container.set_property_margin(8);
 

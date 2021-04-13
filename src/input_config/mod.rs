@@ -25,7 +25,7 @@ pub mod picture_view;
 pub mod video_view;
 
 pub fn build_list_view(
-    relm: &Relm<crate::Win>,
+    relm: &Relm<crate::main_panel::MainPanel>,
     project_path: &Path,
     input_config_widget_list: &mut HashMap<
         Uuid,
@@ -113,7 +113,7 @@ pub fn build_list_view(
 }
 
 pub fn build_input_config_row(
-    relm: &Relm<crate::Win>,
+    relm: &Relm<crate::main_panel::MainPanel>,
     project_path: &Path,
     input_name: &str,
     input_config: &InputConfig,
@@ -196,7 +196,7 @@ pub enum InputConfigViewMsg {
 }
 
 pub struct InputConfigViewModel {
-    parent_relm: Relm<crate::Win>,
+    parent_relm: Relm<crate::main_panel::MainPanel>,
     project_path: PathBuf,
     id: Uuid,
     name: String,
@@ -209,12 +209,24 @@ pub struct InputConfigView {
 
 impl Update for InputConfigView {
     type Model = InputConfigViewModel;
-    type ModelParam = (PathBuf, Uuid, String, InputConfig, Relm<crate::Win>);
+    type ModelParam = (
+        PathBuf,
+        Uuid,
+        String,
+        InputConfig,
+        Relm<crate::main_panel::MainPanel>,
+    );
     type Msg = InputConfigViewMsg;
 
     fn model(
         _: &Relm<Self>,
-        model: (PathBuf, Uuid, String, InputConfig, Relm<crate::Win>),
+        model: (
+            PathBuf,
+            Uuid,
+            String,
+            InputConfig,
+            Relm<crate::main_panel::MainPanel>,
+        ),
     ) -> Self::Model {
         InputConfigViewModel {
             project_path: model.0,
