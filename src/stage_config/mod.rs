@@ -17,8 +17,8 @@ use gtk::{
 use gtk::{
     Adjustment, Button, ButtonExt, ComboBoxExt, ComboBoxText, ComboBoxTextExt, ContainerExt,
     EditableSignals, Entry, EntryExt, Grid, GridExt, GtkListStoreExt, Label, LabelExt, Notebook,
-    OrientableExt, PackType, PolicyType, ScrolledWindow, ScrolledWindowExt, SortColumn, SortType,
-    TreeIter, TreeModel, TreeModelExt, WidgetExt,
+    OrientableExt, PackType, PolicyType, ReliefStyle, ScrolledWindow, ScrolledWindowExt, Separator,
+    SortColumn, SortType, TreeIter, TreeModel, TreeModelExt, WidgetExt,
 };
 
 use relm::{connect, Component, ContainerWidget, Relm, Update, Widget};
@@ -30,6 +30,8 @@ use wvr_data::config::project_config::{
     BufferPrecision, FilterConfig, FilterMode, RenderStageConfig, SampledInput,
 };
 use wvr_data::{DataHolder, DataRange};
+
+use crate::main_panel::Msg;
 
 pub mod input;
 pub mod variable;
@@ -63,7 +65,7 @@ pub fn build_list_view(
         relm,
         add_render_stage_button,
         connect_clicked(_),
-        Some(crate::Msg::AddRenderStage)
+        Some(Msg::AddRenderStage)
     );
 
     add_render_stage_button.show_all();
@@ -85,13 +87,14 @@ pub fn build_list_view(
         page_label.set_hexpand(true);
 
         let remove_button = Button::new();
-        remove_button.set_label("X");
+        remove_button.set_relief(ReliefStyle::None);
+        remove_button.set_label("x");
         {
             connect!(
                 relm,
                 remove_button,
                 connect_clicked(_),
-                Some(crate::Msg::RemoveRenderStage(id))
+                Some(Msg::RemoveRenderStage(id))
             );
         }
 
@@ -443,7 +446,7 @@ impl Update for RenderStageConfigView {
         self.model
             .parent_relm
             .stream()
-            .emit(crate::Msg::UpdateRenderStageConfig(
+            .emit(Msg::UpdateRenderStageConfig(
                 self.model.id,
                 self.model.config.clone(),
             ));
@@ -487,10 +490,6 @@ impl Widget for RenderStageConfigView {
         );
 
         // Building of the filter selection row
-
-        //let filter_label = Label::new(Some("Filter: "));
-        //filter_label.set_xalign(0.0);
-
         let available_filters = load_available_filter_list(&model.project_path).unwrap();
         let filter_store = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
         for name in available_filters.keys() {
@@ -674,6 +673,7 @@ impl Widget for RenderStageConfigView {
         filter_config_wrapper.add(&filter_config_panel);
 
         root.add(&base_config);
+        root.add(&Separator::new(Horizontal));
         root.add(&filter_config_wrapper);
 
         Self {
@@ -699,25 +699,28 @@ pub fn load_available_filter_list(
     let wvr_filter_folder_path = wvr_data::get_filters_path();
 
     // Load filters from project
-    for folder_entry in project_filter_folder_path.read_dir()? {
-        let filter_path = folder_entry?.path();
-        let filter_config_path = filter_path.join("config.json");
-        if !filter_config_path.exists() {
-            continue;
+
+    if project_filter_folder_path.exists() {
+        for folder_entry in project_filter_folder_path.read_dir()? {
+            let filter_path = folder_entry?.path();
+            let filter_config_path = filter_path.join("config.json");
+            if !filter_config_path.exists() {
+                continue;
+            }
+
+            let filter_name = filter_path
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
+
+            let filter_config: FilterConfig =
+                serde_json::from_reader::<File, FilterConfig>(File::open(&filter_config_path)?)
+                    .unwrap();
+
+            available_filter_list.insert(filter_name, (filter_path, filter_config));
         }
-
-        let filter_name = filter_path
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
-
-        let filter_config: FilterConfig =
-            serde_json::from_reader::<File, FilterConfig>(File::open(&filter_config_path)?)
-                .unwrap();
-
-        available_filter_list.insert(filter_name, (filter_path, filter_config));
     }
 
     // Load filters provided by wvr

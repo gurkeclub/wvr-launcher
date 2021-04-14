@@ -6,9 +6,9 @@ use gtk::{
 
 use relm::{connect, Relm};
 
-use crate::Msg;
-
 use wvr_data::config::server_config::ServerConfig;
+
+use crate::main_panel::Msg;
 
 pub fn build_view(
     relm: &Relm<crate::main_panel::MainPanel>,

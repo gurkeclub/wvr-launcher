@@ -6,7 +6,7 @@ use gtk::{
 
 use relm::{connect, Relm};
 
-use crate::Msg;
+use crate::main_panel::Msg;
 
 use wvr_data::config::project_config::ViewConfig;
 
@@ -221,7 +221,7 @@ pub fn build_view(
         relm,
         locked_speed_switch,
         connect_property_active_notify(val),
-        Some(Msg::SetDynamicResolution(val.get_state()))
+        Some(Msg::SetLockedSpeed(val.get_state()))
     );
 
     locked_speed_row.add(&Label::new(Some("Lock Framerate: ")));

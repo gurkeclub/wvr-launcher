@@ -19,6 +19,8 @@ use wvr_data::config::project_config::{InputConfig, Speed};
 
 use path_calculate::*;
 
+use crate::main_panel::Msg;
+
 pub mod cam_view;
 pub mod midi_view;
 pub mod picture_view;
@@ -45,7 +47,7 @@ pub fn build_list_view(
         relm,
         add_cam_button,
         connect_clicked(_),
-        Some(crate::Msg::AddCamInput)
+        Some(Msg::AddCamInput)
     );
 
     let add_video_button = Button::new();
@@ -55,7 +57,7 @@ pub fn build_list_view(
         relm,
         add_video_button,
         connect_clicked(_),
-        Some(crate::Msg::AddVideoInput)
+        Some(Msg::AddVideoInput)
     );
 
     let add_picture_button = Button::new();
@@ -65,7 +67,7 @@ pub fn build_list_view(
         relm,
         add_picture_button,
         connect_clicked(_),
-        Some(crate::Msg::AddPictureInput)
+        Some(Msg::AddPictureInput)
     );
 
     let add_midi_button = Button::new();
@@ -75,7 +77,7 @@ pub fn build_list_view(
         relm,
         add_midi_button,
         connect_clicked(_),
-        Some(crate::Msg::AddMidiInput)
+        Some(Msg::AddMidiInput)
     );
 
     input_list_control_container.add(&add_cam_button);
@@ -169,7 +171,7 @@ pub fn build_input_config_row(
         relm,
         remove_button,
         connect_clicked(_),
-        Some(crate::Msg::RemoveInput(id))
+        Some(Msg::RemoveInput(id))
     );
 
     wrapper.add(&row_label);
@@ -310,14 +312,11 @@ impl Update for InputConfigView {
             },
         }
 
-        self.model
-            .parent_relm
-            .stream()
-            .emit(crate::Msg::UpdateInputConfig(
-                self.model.id,
-                self.model.name.clone(),
-                self.model.config.clone(),
-            ));
+        self.model.parent_relm.stream().emit(Msg::UpdateInputConfig(
+            self.model.id,
+            self.model.name.clone(),
+            self.model.config.clone(),
+        ));
     }
 }
 

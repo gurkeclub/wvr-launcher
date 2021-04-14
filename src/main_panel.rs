@@ -12,7 +12,7 @@ use gtk::prelude::{GtkListStoreExtManual, NotebookExtManual, TreeSortableExtManu
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
     Button, ButtonExt, ComboBoxExt, ComboBoxText, ContainerExt, GtkListStoreExt, Label, LabelExt,
-    Notebook, NotebookExt, Settings, SortColumn, SortType, WidgetExt,
+    Notebook, NotebookExt, ReliefStyle, Settings, SortColumn, SortType, WidgetExt,
 };
 
 use relm::{connect, Component, Relm, Update, Widget};
@@ -45,6 +45,39 @@ pub fn get_input_choice_list(config: &ProjectConfig) -> Vec<String> {
     result.sort();
 
     result
+}
+
+#[derive(Msg, Debug)]
+pub enum Msg {
+    SetBpm(f64),
+    SetWidth(i64),
+    SetHeight(i64),
+    SetTargetFps(f64),
+    SetDynamicResolution(bool),
+    SetVSync(bool),
+    SetScreenshot(bool),
+    SetFullscreen(bool),
+    SetLockedSpeed(bool),
+
+    SetServerIp(String),
+    SetServerPort(i64),
+    SetServerEnabled(bool),
+
+    AddPictureInput,
+    AddCamInput,
+    AddVideoInput,
+    AddMidiInput,
+    UpdateInputConfig(Uuid, String, InputConfig),
+    RemoveInput(Uuid),
+
+    AddRenderStage,
+    UpdateRenderStageConfig(Uuid, RenderStageConfig),
+    RemoveRenderStage(Uuid),
+
+    UpdateRenderedTextureName,
+
+    Save,
+    Start,
 }
 
 pub struct Model {
@@ -127,7 +160,6 @@ impl Update for MainPanel {
         let input_choice_list = get_input_choice_list(&self.model.config);
 
         match event {
-            Msg::Quit => gtk::main_quit(),
             Msg::SetBpm(bpm) => self.model.config.bpm = bpm as f32,
             Msg::SetWidth(width) => self.model.config.view.width = width,
             Msg::SetHeight(height) => self.model.config.view.height = height,
@@ -148,7 +180,6 @@ impl Update for MainPanel {
             Msg::Start => {
                 self.start();
             }
-            Msg::Error(e) => eprintln!("{:?}", e),
 
             Msg::AddCamInput => {
                 let input_cam_count = self
@@ -320,13 +351,14 @@ impl Update for MainPanel {
                 page_label.set_hexpand(true);
 
                 let remove_button = Button::new();
-                remove_button.set_label("X");
+                remove_button.set_relief(ReliefStyle::None);
+                remove_button.set_label("x");
                 {
                     connect!(
                         self.relm,
                         remove_button,
                         connect_clicked(_),
-                        Some(crate::Msg::RemoveRenderStage(id))
+                        Some(Msg::RemoveRenderStage(id))
                     );
                 }
 
@@ -382,7 +414,7 @@ impl Update for MainPanel {
                 render_chain_changed = true;
             }
 
-            Msg::UpdateRenderedTextureName | Msg::UpdateRenderedTextureSampling => {
+            Msg::UpdateRenderedTextureName => {
                 self.model.config.final_stage.inputs.insert(
                     "iChannel0".to_string(),
                     SampledInput::Linear(
