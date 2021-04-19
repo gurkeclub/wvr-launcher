@@ -1,10 +1,6 @@
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::Write;
-use std::path::Path;
 use std::path::PathBuf;
 
-use nfd2::Response;
+use anyhow::Result;
 
 use relm::connect;
 use relm_derive::Msg;
@@ -14,126 +10,47 @@ use gtk::prelude::*;
 
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    AccelFlags, AccelGroup, ButtonsType, ContainerExt, DialogBuilder, DialogExt, Entry, EntryExt,
-    GtkWindowExt, Inhibit, Menu, MenuBar, MenuItem, MessageDialogBuilder, MessageType,
-    ResponseType, Settings, WidgetExt, Window, WindowPosition, WindowType,
+    AccelFlags, AccelGroup, AspectFrame, Button, ButtonExt, ButtonsType, ContainerExt,
+    DialogBuilder, DialogExt, Entry, EntryExt, FrameExt, GLArea, GLAreaExt, GtkWindowExt, Inhibit,
+    Menu, MenuBar, MenuItem, MessageDialogBuilder, MessageType, Paned, PanedExt, ResponseType,
+    Settings, ShadowType, WidgetExt, Window, WindowPosition, WindowType,
 };
 
 use relm::{Component, ContainerWidget, Relm, Update, Widget};
 
-use wvr_data::config::project_config::{
-    BufferPrecision, FilterMode, ProjectConfig, RenderStageConfig, SampledInput, ViewConfig,
-};
-use wvr_data::config::server_config::ServerConfig;
+use wvr_data::config::project_config::ProjectConfig;
 
-use crate::main_panel::MainPanel;
+use crate::config_panel::msg::ConfigPanelMsg;
+use crate::config_panel::view::ConfigPanel;
 use crate::welcome_panel;
 
-fn create_project(project_config_path: &Path) -> Option<ProjectConfig> {
-    std::fs::create_dir_all(&project_config_path).unwrap();
-    std::fs::create_dir_all(&project_config_path.join("filters")).unwrap();
-
-    let patterns_stage = RenderStageConfig {
-        name: "Patterns".to_owned(),
-        filter: "dot_grid".to_owned(),
-        filter_mode_params: FilterMode::Rectangle(0.0, 0.0, 1.0, 1.0),
-        inputs: HashMap::new(),
-        variables: HashMap::new(),
-        precision: BufferPrecision::F32,
-    };
-
-    let mut final_stage_input_list = HashMap::new();
-    final_stage_input_list.insert(
-        "iChannel0".to_owned(),
-        SampledInput::Linear("Patterns".to_owned()),
-    );
-
-    let final_stage = RenderStageConfig {
-        name: "FinalStage".to_owned(),
-        filter: "copy_input".to_owned(),
-        filter_mode_params: FilterMode::Rectangle(0.0, 0.0, 1.0, 1.0),
-        inputs: final_stage_input_list,
-        variables: HashMap::new(),
-        precision: BufferPrecision::F32,
-    };
-
-    let project_config = ProjectConfig {
-        bpm: 89.0,
-        view: ViewConfig {
-            width: 640,
-            height: 480,
-            fullscreen: false,
-            dynamic: true,
-            vsync: true,
-            screenshot: false,
-            screenshot_path: PathBuf::from("output/"),
-            target_fps: 60.0,
-            locked_speed: false,
-        },
-        server: ServerConfig {
-            ip: "localhost".to_owned(),
-            port: 3000,
-            enable: false,
-        },
-        inputs: HashMap::new(),
-        render_chain: vec![patterns_stage],
-        final_stage,
-    };
-    if let Ok(mut project_config_file) =
-        std::fs::File::create(&project_config_path.join("config.json"))
-    {
-        project_config_file
-            .write_all(
-                &serde_json::ser::to_string_pretty(&project_config)
-                    .unwrap()
-                    .into_bytes(),
-            )
-            .unwrap();
-
-        Some(project_config)
-    } else {
-        None
-    }
-}
-
-fn get_config() -> std::option::Option<(PathBuf, ProjectConfig)> {
-    let wvr_data_path = wvr_data::get_data_path();
-
-    let mut config_path = None;
-    let projects_path = wvr_data_path.join("projects");
-
-    while config_path.is_none() {
-        match nfd2::open_file_dialog(None, Some(&projects_path)).expect("oh no") {
-            Response::Okay(file_path) => config_path = Some(file_path),
-            Response::OkayMultiple(_) => (),
-            Response::Cancel => return None,
-        }
-    }
-
-    let config_path = config_path.unwrap();
-
-    let project_path = config_path.parent().unwrap().to_owned();
-    let config: ProjectConfig = if let Ok(file) = File::open(&config_path) {
-        serde_json::from_reader::<File, ProjectConfig>(file).unwrap()
-    } else {
-        panic!("Could not find config file {:?}", project_path);
-    };
-
-    Some((project_path, config))
-}
 #[derive(Msg, Debug)]
 pub enum Msg {
+    UpdateConfig(ProjectConfig),
     NewProject,
     OpenProject(PathBuf, ProjectConfig),
     SaveProject,
+    StartProject,
     Quit,
 }
-pub struct Model {}
+pub struct Model {
+    project_path: Option<PathBuf>,
+    project_config: Option<ProjectConfig>,
+}
 
 pub struct MainWindow {
+    model: Model,
     window: Window,
-    panel_container: gtk::Box,
-    panel: Option<Component<MainPanel>>,
+
+    control_container: gtk::Box,
+
+    project_container: Paned,
+
+    config_panel_container: gtk::Box,
+    config_panel: Option<Component<ConfigPanel>>,
+
+    glarea: GLArea,
+    glarea_wrapper: AspectFrame,
 
     relm: Relm<Self>,
 }
@@ -195,7 +112,9 @@ impl MainWindow {
                                 .build();
                             error_message.run();
                             error_message.close();
-                        } else if let Some(project_config) = create_project(&new_project_path) {
+                        } else if let Some(project_config) =
+                            crate::utils::create_project(&new_project_path)
+                        {
                             created_project = Some((new_project_path, project_config));
                         }
                     }
@@ -212,6 +131,25 @@ impl MainWindow {
 
         created_project
     }
+
+    fn start_wvr(&mut self) -> Result<()> {
+        if let (Some(project_path), Some(project_config)) =
+            (&self.model.project_path, &self.model.project_config)
+        {
+            let order_sender =
+                crate::wvr_frame::build_wvr_frame(&self.glarea, project_path, project_config)?;
+
+            if let Some(config_panel) = &self.config_panel {
+                config_panel
+                    .stream()
+                    .emit(ConfigPanelMsg::SetControlChannel(order_sender));
+            }
+
+            self.project_container.show_all();
+        }
+
+        Ok(())
+    }
 }
 
 impl Update for MainWindow {
@@ -220,15 +158,29 @@ impl Update for MainWindow {
     type Msg = Msg;
 
     fn model(_: &Relm<Self>, _: ()) -> Self::Model {
-        Model {}
+        Model {
+            project_path: None,
+            project_config: None,
+        }
     }
 
     fn update(&mut self, event: Msg) {
         match event {
+            Msg::UpdateConfig(project_config) => {
+                self.model.project_config = Some(project_config);
+            }
             Msg::OpenProject(project_path, project_config) => {
-                for children in &self.panel_container.get_children() {
-                    self.panel_container.remove(children);
+                self.model.project_path = Some(project_path.clone());
+                self.model.project_config = Some(project_config.clone());
+
+                for children in &self.config_panel_container.get_children() {
+                    self.config_panel_container.remove(children);
                 }
+
+                for children in &self.glarea_wrapper.get_children() {
+                    self.glarea_wrapper.remove(children);
+                }
+
                 self.window.set_title(&format!(
                     "wvr://{:}",
                     project_path
@@ -240,15 +192,33 @@ impl Update for MainWindow {
                         .to_str()
                         .unwrap()
                 ));
-                self.panel = Some(
-                    self.panel_container
-                        .add_widget::<MainPanel>((project_path, project_config)),
+
+                let glarea = GLArea::new();
+
+                glarea.set_required_version(3, 2);
+                glarea.set_hexpand(true);
+                glarea.set_vexpand(true);
+
+                glarea.set_size_request(
+                    (project_config.view.width / 4) as i32,
+                    (project_config.view.height / 4) as i32,
                 );
-                self.panel_container.show_all();
+
+                self.glarea_wrapper.add(&glarea);
+
+                self.glarea = glarea;
+
+                self.config_panel = Some(self.config_panel_container.add_widget::<ConfigPanel>((
+                    self.relm.clone(),
+                    project_path,
+                    project_config,
+                )));
+
+                self.root().show_all();
             }
             Msg::SaveProject => {
-                if let Some(panel) = &self.panel {
-                    panel.emit(crate::main_panel::Msg::Save);
+                if let Some(panel) = &self.config_panel {
+                    panel.emit(ConfigPanelMsg::Save);
                 }
             }
 
@@ -259,6 +229,9 @@ impl Update for MainWindow {
                         .stream()
                         .emit(Msg::OpenProject(new_project_path, new_project_config));
                 }
+            }
+            Msg::StartProject => {
+                self.start_wvr().unwrap();
             }
             Msg::Quit => gtk::main_quit(),
         }
@@ -301,7 +274,7 @@ fn build_menu_bar(relm: &Relm<MainWindow>, accel_group: &AccelGroup) -> MenuBar 
         relm,
         open_menu_item,
         connect_activate(_),
-        if let Some(project) = get_config() {
+        if let Some(project) = crate::utils::get_config() {
             Some(Msg::OpenProject(project.0, project.1))
         } else {
             None
@@ -322,7 +295,7 @@ impl Widget for MainWindow {
         self.window.clone()
     }
 
-    fn view(relm: &Relm<Self>, _: Self::Model) -> Self {
+    fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
         let settings = Settings::get_default().unwrap();
         settings
             .set_property("gtk-application-prefer-dark-theme", &true)
@@ -332,6 +305,7 @@ impl Widget for MainWindow {
         window.hide();
         window.set_title("wvr");
         window.set_position(gtk::WindowPosition::Center);
+        window.maximize();
 
         let accel_group = AccelGroup::new();
         window.add_accel_group(&accel_group);
@@ -340,12 +314,51 @@ impl Widget for MainWindow {
 
         v_box.pack_start(&build_menu_bar(relm, &accel_group), false, false, 0);
 
-        let panel_container = gtk::Box::new(Vertical, 0);
+        let project_container = Paned::new(Horizontal);
 
-        panel_container.add(&welcome_panel::build_welcome_panel(relm));
-        v_box.add(&panel_container);
+        let config_panel_container = gtk::Box::new(Vertical, 0);
 
-        //v_box.pack_start(&label, true, true, 0);
+        config_panel_container.add(&welcome_panel::build_welcome_panel(relm));
+
+        project_container.pack1(&config_panel_container, true, false);
+
+        let glarea_wrapper = AspectFrame::new(None, 0.5, 0.0, 16.0 / 9.0, true);
+        glarea_wrapper.set_property_margin(8);
+        glarea_wrapper.set_shadow_type(ShadowType::None);
+        glarea_wrapper.set_hexpand(true);
+        glarea_wrapper.set_vexpand(true);
+
+        let glarea = GLArea::new();
+
+        glarea.set_size_request(380, 270);
+
+        glarea.set_required_version(3, 2);
+        glarea.set_hexpand(true);
+        glarea.set_vexpand(true);
+
+        glarea_wrapper.add(&glarea);
+        project_container.pack2(&glarea_wrapper, true, true);
+
+        project_container.show_all();
+
+        v_box.add(&project_container);
+
+        let control_container = gtk::Box::new(Vertical, 8);
+        control_container.set_property_margin(8);
+
+        let start_button = Button::new();
+        start_button.set_label("Start");
+        start_button.set_hexpand(true);
+        connect!(
+            relm,
+            start_button,
+            connect_clicked(_),
+            Some(Msg::StartProject)
+        );
+
+        control_container.add(&start_button);
+
+        v_box.add(&control_container);
 
         connect!(
             relm,
@@ -358,10 +371,19 @@ impl Widget for MainWindow {
 
         window.show_all();
 
+        control_container.hide();
+
         MainWindow {
+            model,
             window,
-            panel_container,
-            panel: None,
+            control_container,
+
+            project_container,
+            glarea,
+            glarea_wrapper,
+
+            config_panel_container,
+            config_panel: None,
 
             relm: relm.clone(),
         }

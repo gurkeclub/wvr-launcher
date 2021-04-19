@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::sync::mpsc::Sender;
 
 use uuid::Uuid;
 
@@ -19,6 +19,7 @@ use relm::{connect, Component, Relm, Update, Widget};
 
 use strsim::levenshtein;
 
+use wvr_com::data::{Message, RenderStageUpdate};
 use wvr_data::config::project_config::ProjectConfig;
 use wvr_data::config::project_config::{
     BufferPrecision, FilterMode, InputConfig, RenderStageConfig, SampledInput, Speed,
@@ -30,63 +31,20 @@ use crate::stage_config;
 use crate::view_config;
 
 use crate::input_config::InputConfigView;
-use crate::stage_config::RenderStageConfigView;
-use crate::stage_config::RenderStageConfigViewMsg;
-use crate::Msg;
+use crate::stage_config::view::{RenderStageConfigView, RenderStageConfigViewMsg};
 
-pub fn get_input_choice_list(config: &ProjectConfig) -> Vec<String> {
-    let mut result: Vec<String> = config
-        .inputs
-        .keys()
-        .map(String::clone)
-        .chain(config.render_chain.iter().map(|stage| stage.name.clone()))
-        .collect();
-
-    result.sort();
-
-    result
-}
-
-#[derive(Msg, Debug)]
-pub enum Msg {
-    SetBpm(f64),
-    SetWidth(i64),
-    SetHeight(i64),
-    SetTargetFps(f64),
-    SetDynamicResolution(bool),
-    SetVSync(bool),
-    SetScreenshot(bool),
-    SetFullscreen(bool),
-    SetLockedSpeed(bool),
-
-    SetServerIp(String),
-    SetServerPort(i64),
-    SetServerEnabled(bool),
-
-    AddPictureInput,
-    AddCamInput,
-    AddVideoInput,
-    AddMidiInput,
-    UpdateInputConfig(Uuid, String, InputConfig),
-    RemoveInput(Uuid),
-
-    AddRenderStage,
-    UpdateRenderStageConfig(Uuid, RenderStageConfig),
-    RemoveRenderStage(Uuid),
-
-    UpdateRenderedTextureName,
-
-    Save,
-    Start,
-}
+use super::get_input_choice_list;
+use super::msg::ConfigPanelMsg;
 
 pub struct Model {
+    parent_relm: Relm<crate::main_window::MainWindow>,
     project_path: PathBuf,
-    config: ProjectConfig,
+    pub config: ProjectConfig,
+    control_channel: Option<Sender<Message>>,
 }
 
-pub struct MainPanel {
-    model: Model,
+pub struct ConfigPanel {
+    pub model: Model,
 
     window_container: gtk::Box,
 
@@ -95,22 +53,15 @@ pub struct MainPanel {
         HashMap<Uuid, (String, InputConfig, Component<InputConfigView>, gtk::Box)>,
 
     render_stage_config_list_container: Notebook,
-    render_stage_config_widget_list: HashMap<
-        Uuid,
-        (
-            RenderStageConfig,
-            Component<RenderStageConfigView>,
-            gtk::Box,
-        ),
-    >,
-    render_stage_order: Vec<Uuid>,
+    pub render_stage_config_widget_list:
+        HashMap<Uuid, (usize, Component<RenderStageConfigView>, gtk::Box)>,
 
-    renderered_stage_name_chooser: ComboBoxText,
+    final_stage_name_chooser: ComboBoxText,
 
     relm: Relm<Self>,
 }
 
-impl MainPanel {
+impl ConfigPanel {
     fn save_config(&mut self, project_config_file_path: &Path) {
         println!("Saving to {:?}", project_config_file_path);
 
@@ -123,65 +74,68 @@ impl MainPanel {
             project_config_file.write_all(&config_as_bytes).unwrap();
         }
     }
-
-    fn start(&mut self) {
-        let config_path = self.model.project_path.join("config.tmp.json");
-
-        self.save_config(&config_path);
-
-        //self.window.hide();
-
-        Command::new("wvr")
-            .arg("-c")
-            .arg(config_path.to_str().unwrap())
-            .output()
-            .expect("failed to execute process");
-
-        //self.window.show();
-    }
 }
 
-impl Update for MainPanel {
+impl Update for ConfigPanel {
     type Model = Model;
-    type ModelParam = (PathBuf, ProjectConfig);
-    type Msg = Msg;
+    type ModelParam = (Relm<crate::main_window::MainWindow>, PathBuf, ProjectConfig);
+    type Msg = ConfigPanelMsg;
 
-    fn model(_: &Relm<Self>, project: (PathBuf, ProjectConfig)) -> Self::Model {
+    fn model(
+        _: &Relm<Self>,
+        project: (Relm<crate::main_window::MainWindow>, PathBuf, ProjectConfig),
+    ) -> Self::Model {
         Model {
-            project_path: project.0,
-            config: project.1,
+            parent_relm: project.0,
+            project_path: project.1,
+            config: project.2,
+            control_channel: None,
         }
     }
 
-    fn update(&mut self, event: Msg) {
+    fn update(&mut self, event: ConfigPanelMsg) {
         let mut input_list_changed = false;
-        let mut render_chain_changed = false;
 
         let input_choice_list = get_input_choice_list(&self.model.config);
 
-        match event {
-            Msg::SetBpm(bpm) => self.model.config.bpm = bpm as f32,
-            Msg::SetWidth(width) => self.model.config.view.width = width,
-            Msg::SetHeight(height) => self.model.config.view.height = height,
-            Msg::SetTargetFps(fps) => self.model.config.view.target_fps = fps as f32,
-            Msg::SetDynamicResolution(dynamic) => self.model.config.view.dynamic = dynamic,
-            Msg::SetVSync(vsync) => self.model.config.view.vsync = vsync,
-            Msg::SetScreenshot(screenshot) => self.model.config.view.screenshot = screenshot,
-            Msg::SetFullscreen(fullscreen) => self.model.config.view.fullscreen = fullscreen,
-            Msg::SetLockedSpeed(locked_speed) => self.model.config.view.locked_speed = locked_speed,
+        match &event {
+            ConfigPanelMsg::SetBpm(bpm) => {
+                self.model.config.bpm = *bpm as f32;
+            }
+            ConfigPanelMsg::SetWidth(width) => {
+                self.model.config.view.width = *width;
+            }
+            ConfigPanelMsg::SetHeight(height) => {
+                self.model.config.view.height = *height;
+            }
+            ConfigPanelMsg::SetTargetFps(fps) => {
+                self.model.config.view.target_fps = *fps as f32;
+            }
+            ConfigPanelMsg::SetDynamicResolution(dynamic) => {
+                self.model.config.view.dynamic = *dynamic;
+            }
+            ConfigPanelMsg::SetVSync(vsync) => {
+                self.model.config.view.vsync = *vsync;
+            }
+            ConfigPanelMsg::SetScreenshot(screenshot) => {
+                self.model.config.view.screenshot = *screenshot;
+            }
+            ConfigPanelMsg::SetFullscreen(fullscreen) => {
+                self.model.config.view.fullscreen = *fullscreen;
+            }
+            ConfigPanelMsg::SetLockedSpeed(locked_speed) => {
+                self.model.config.view.locked_speed = *locked_speed;
+            }
 
-            Msg::SetServerIp(ip) => self.model.config.server.ip = ip,
-            Msg::SetServerPort(port) => self.model.config.server.port = port as usize,
-            Msg::SetServerEnabled(enable) => self.model.config.server.enable = enable,
+            ConfigPanelMsg::SetServerIp(ip) => self.model.config.server.ip = ip.clone(),
+            ConfigPanelMsg::SetServerPort(port) => self.model.config.server.port = *port as usize,
+            ConfigPanelMsg::SetServerEnabled(enable) => self.model.config.server.enable = *enable,
 
-            Msg::Save => {
+            ConfigPanelMsg::Save => {
                 self.save_config(&self.model.project_path.join("config.json"));
             }
-            Msg::Start => {
-                self.start();
-            }
 
-            Msg::AddCamInput => {
+            ConfigPanelMsg::AddCamInput => {
                 let input_cam_count = self
                     .input_config_widget_list
                     .values()
@@ -211,7 +165,7 @@ impl Update for MainPanel {
 
                 input_list_changed = true;
             }
-            Msg::AddVideoInput => {
+            ConfigPanelMsg::AddVideoInput => {
                 let input_video_count = self
                     .input_config_widget_list
                     .values()
@@ -242,7 +196,7 @@ impl Update for MainPanel {
 
                 input_list_changed = true;
             }
-            Msg::AddPictureInput => {
+            ConfigPanelMsg::AddPictureInput => {
                 let input_picture_count = self
                     .input_config_widget_list
                     .values()
@@ -272,7 +226,7 @@ impl Update for MainPanel {
 
                 input_list_changed = true;
             }
-            Msg::AddMidiInput => {
+            ConfigPanelMsg::AddMidiInput => {
                 let input_midi_count = self
                     .input_config_widget_list
                     .values()
@@ -300,7 +254,7 @@ impl Update for MainPanel {
 
                 input_list_changed = true;
             }
-            Msg::RemoveInput(id) => {
+            ConfigPanelMsg::RemoveInput(id) => {
                 if let Some((_, _, _, input_view_wrapper)) = self.input_config_widget_list.get(&id)
                 {
                     self.input_list_container.remove(input_view_wrapper);
@@ -309,18 +263,18 @@ impl Update for MainPanel {
 
                 input_list_changed = true;
             }
-            Msg::UpdateInputConfig(id, new_name, new_config) => {
+            ConfigPanelMsg::UpdateInputConfig(id, new_name, new_config) => {
                 if let Some((ref mut name, ref mut config, _, _)) =
                     self.input_config_widget_list.get_mut(&id)
                 {
-                    *name = new_name;
-                    *config = new_config;
+                    *name = new_name.clone();
+                    *config = new_config.clone();
                 }
 
                 input_list_changed = true;
             }
 
-            Msg::AddRenderStage => {
+            ConfigPanelMsg::AddRenderStage => {
                 let render_stage_name = format!(
                     "Layer #{:}",
                     self.render_stage_config_list_container.get_children().len()
@@ -358,7 +312,7 @@ impl Update for MainPanel {
                         self.relm,
                         remove_button,
                         connect_clicked(_),
-                        Some(Msg::RemoveRenderStage(id))
+                        Some(ConfigPanelMsg::RemoveRenderStage(id))
                     );
                 }
 
@@ -370,30 +324,78 @@ impl Update for MainPanel {
 
                 page_label_container.show_all();
                 wrapper.show_all();
-                self.render_stage_config_widget_list
-                    .insert(id, (render_stage_config, render_stage_config_view, wrapper));
-                self.render_stage_order.push(id);
 
-                render_chain_changed = true;
+                let render_stage_index = self.model.config.render_chain.len();
+
+                self.model.config.render_chain.push(render_stage_config);
+
+                self.render_stage_config_widget_list
+                    .insert(id, (render_stage_index, render_stage_config_view, wrapper));
             }
 
-            Msg::RemoveRenderStage(id) => {
-                if let Some((_, _, render_stage_config_view_wrapper)) =
+            ConfigPanelMsg::RemoveRenderStage(id) => {
+                let removed_index = None;
+
+                if let Some((render_stage_index, _, render_stage_config_view_wrapper)) =
                     self.render_stage_config_widget_list.get(&id)
                 {
+                    self.model.config.render_chain.remove(*render_stage_index);
                     self.render_stage_config_list_container
                         .remove(render_stage_config_view_wrapper);
                 }
-                self.render_stage_config_widget_list.remove(&id);
-                if let Some(id_index) = self.render_stage_order.iter().position(|&n| n == id) {
-                    self.render_stage_order.remove(id_index);
+
+                if let Some(removed_index) = removed_index {
+                    for (ref mut render_stage_index, _, _) in
+                        self.render_stage_config_widget_list.values_mut()
+                    {
+                        if *render_stage_index > removed_index {
+                            *render_stage_index -= 1;
+                        }
+                    }
                 }
 
-                render_chain_changed = true;
+                self.render_stage_config_widget_list.remove(&id);
             }
-            Msg::UpdateRenderStageConfig(id, new_config) => {
-                if let Some((ref mut config, _, render_stage_config_view_wrapper)) =
-                    self.render_stage_config_widget_list.get_mut(&id)
+            ConfigPanelMsg::UpdateRenderStageVariable(id, variable_name, variable_value) => {
+                if let Some((render_stage_index, _, _)) =
+                    self.render_stage_config_widget_list.get(&id)
+                {
+                    if let Some(ref mut config) =
+                        self.model.config.render_chain.get_mut(*render_stage_index)
+                    {
+                        config
+                            .variables
+                            .insert(variable_name.clone(), variable_value.clone());
+                    }
+                }
+            }
+            ConfigPanelMsg::UpdateRenderStageInput(id, input_name, new_input_value) => {
+                if let Some((render_stage_index, _, _)) =
+                    self.render_stage_config_widget_list.get(&id)
+                {
+                    if let Some(ref mut config) =
+                        self.model.config.render_chain.get_mut(*render_stage_index)
+                    {
+                        config
+                            .inputs
+                            .insert(input_name.clone(), new_input_value.clone());
+                    }
+                }
+            }
+            ConfigPanelMsg::UpdateRenderStageFilterModeParams(id, new_filter_mode_params) => {
+                if let Some((render_stage_index, _, _)) =
+                    self.render_stage_config_widget_list.get(&id)
+                {
+                    if let Some(ref mut config) =
+                        self.model.config.render_chain.get_mut(*render_stage_index)
+                    {
+                        config.filter_mode_params = new_filter_mode_params.clone();
+                    }
+                }
+            }
+            ConfigPanelMsg::UpdateRenderStageName(id, new_name) => {
+                if let Some((render_stage_index, _, render_stage_config_view_wrapper)) =
+                    self.render_stage_config_widget_list.get(&id)
                 {
                     if let Ok(page_label_container) = self
                         .render_stage_config_list_container
@@ -403,27 +405,47 @@ impl Update for MainPanel {
                     {
                         if let Some(page_label) = page_label_container.get_children().get(1) {
                             if let Some(page_label) = page_label.downcast_ref::<Label>() {
-                                page_label.set_text(new_config.name.as_str());
+                                page_label.set_text(new_name.as_str());
                             }
                         }
                     }
 
-                    *config = new_config;
+                    if let Some(ref mut config) =
+                        self.model.config.render_chain.get_mut(*render_stage_index)
+                    {
+                        if &config.name != new_name {
+                            config.name = new_name.clone();
+                            input_list_changed = true;
+                        }
+                    }
                 }
-
-                render_chain_changed = true;
+            }
+            ConfigPanelMsg::UpdateRenderStageFilter(id, new_filter) => {
+                if let Some((render_stage_index, _, _)) =
+                    self.render_stage_config_widget_list.get(&id)
+                {
+                    if let Some(ref mut config) =
+                        self.model.config.render_chain.get_mut(*render_stage_index)
+                    {
+                        config.filter = new_filter.clone();
+                    }
+                }
             }
 
-            Msg::UpdateRenderedTextureName => {
+            ConfigPanelMsg::UpdateRenderedTextureName => {
                 self.model.config.final_stage.inputs.insert(
                     "iChannel0".to_string(),
-                    SampledInput::Linear(
-                        self.renderered_stage_name_chooser
+                    SampledInput::Mipmaps(
+                        self.final_stage_name_chooser
                             .get_active_id()
                             .unwrap_or_else(|| glib::GString::from(""))
                             .to_string(),
                     ),
                 );
+            }
+
+            ConfigPanelMsg::SetControlChannel(control_channel) => {
+                self.model.control_channel = Some(control_channel.clone());
             }
         }
 
@@ -437,11 +459,9 @@ impl Update for MainPanel {
             }
         }
 
-        if render_chain_changed {
-            self.model.config.render_chain.clear();
-            for id in &self.render_stage_order {
-                let (config, _, _) = self.render_stage_config_widget_list.get(id).unwrap();
-                self.model.config.render_chain.push(config.clone());
+        if let Some(message) = event.to_wvr_message(self) {
+            if let Some(control_channel) = &mut self.model.control_channel {
+                control_channel.send(message).unwrap();
             }
         }
 
@@ -454,7 +474,7 @@ impl Update for MainPanel {
                 ));
             }
 
-            let current_id = if let Some(id) = self.renderered_stage_name_chooser.get_active_id() {
+            let current_id = if let Some(id) = self.final_stage_name_chooser.get_active_id() {
                 id.to_string()
             } else {
                 new_input_choice_list[0].clone()
@@ -465,7 +485,7 @@ impl Update for MainPanel {
                 let mut closest_id_distance = levenshtein(&current_id, &closest_id);
 
                 let input_name_store = self
-                    .renderered_stage_name_chooser
+                    .final_stage_name_chooser
                     .get_model()
                     .unwrap()
                     .downcast::<gtk::ListStore>()
@@ -483,18 +503,51 @@ impl Update for MainPanel {
                     }
                 }
 
-                if closest_id != &current_id {
-                    self.renderered_stage_name_chooser
-                        .set_active_id(Some(&closest_id));
-                }
+                self.model.config.final_stage.inputs.insert(
+                    "iChannel0".to_string(),
+                    SampledInput::Mipmaps(closest_id.clone()),
+                );
+                self.final_stage_name_chooser
+                    .set_active_id(Some(&closest_id));
             } else {
-                self.renderered_stage_name_chooser.set_active_id(None);
+                self.final_stage_name_chooser.set_active_id(None);
+            }
+
+            let mut message_list = Vec::new();
+            for (render_stage_index, render_stage_config) in
+                self.model.config.render_chain.iter().enumerate()
+            {
+                for (input_name, input) in &render_stage_config.inputs {
+                    message_list.push(Message::UpdateRenderStage(
+                        render_stage_index,
+                        RenderStageUpdate::Input(input_name.clone(), input.clone()),
+                    ))
+                }
+            }
+            if let Some(final_stage_input) = self.model.config.final_stage.inputs.get("iChannel0") {
+                message_list.push(Message::UpdateFinalStage(RenderStageUpdate::Input(
+                    "iChannel0".to_string(),
+                    final_stage_input.clone(),
+                )));
+            }
+
+            if let Some(control_channel) = &mut self.model.control_channel {
+                for message in message_list {
+                    control_channel.send(message).unwrap();
+                }
             }
         }
+
+        self.model
+            .parent_relm
+            .stream()
+            .emit(crate::main_window::Msg::UpdateConfig(
+                self.model.config.clone(),
+            ));
     }
 }
 
-impl Widget for MainPanel {
+impl Widget for ConfigPanel {
     type Root = gtk::Box;
 
     fn root(&self) -> Self::Root {
@@ -509,14 +562,13 @@ impl Widget for MainPanel {
 
         let mut input_config_widget_list = HashMap::new();
         let mut render_stage_config_widget_list = HashMap::new();
-        let mut render_stage_order = Vec::new();
 
         let model = model;
 
         let window_container = gtk::Box::new(Vertical, 0);
 
         let tabs_container = Notebook::new();
-        tabs_container.set_tab_pos(gtk::PositionType::Left);
+        tabs_container.set_tab_pos(gtk::PositionType::Top);
         tabs_container.set_show_border(false);
 
         let view_config_widget =
@@ -539,7 +591,6 @@ impl Widget for MainPanel {
             &model.config.render_chain,
             &get_input_choice_list(&model.config),
             &mut render_stage_config_widget_list,
-            &mut render_stage_order,
         );
 
         render_stage_panel.add(&render_stage_config_list_container);
@@ -568,12 +619,9 @@ impl Widget for MainPanel {
             .unwrap()
             .set_tooltip_text(Some("Configure the rendered layers."));
 
-        let control_container = gtk::Box::new(Vertical, 8);
-        control_container.set_property_margin(8);
-
         // Building the row allowing selection of the texture to render
         let final_stage_row = gtk::Box::new(Horizontal, 8);
-        //final_stage_row.set_property_margin(8);
+        final_stage_row.set_property_margin(8);
 
         let final_stage_label = Label::new(Some("Displayed layer:"));
 
@@ -584,52 +632,43 @@ impl Widget for MainPanel {
         input_name_store.set_sort_column_id(SortColumn::Index(0), SortType::Ascending);
         input_name_store.set_default_sort_func(&stage_config::list_store_sort_function);
 
-        let renderered_stage_name_chooser = gtk::ComboBoxText::new();
-        renderered_stage_name_chooser.set_hexpand(true);
-        renderered_stage_name_chooser.set_model(Some(&input_name_store));
+        let final_stage_name_chooser = gtk::ComboBoxText::new();
+        final_stage_name_chooser.set_hexpand(true);
+        final_stage_name_chooser.set_model(Some(&input_name_store));
 
-        renderered_stage_name_chooser.set_id_column(0);
-        renderered_stage_name_chooser.set_entry_text_column(1);
+        final_stage_name_chooser.set_id_column(0);
+        final_stage_name_chooser.set_entry_text_column(1);
 
         match model.config.final_stage.inputs.values().next().unwrap() {
             SampledInput::Linear(input_name) => {
-                renderered_stage_name_chooser.set_active_id(Some(input_name));
+                final_stage_name_chooser.set_active_id(Some(input_name));
             }
 
             SampledInput::Nearest(input_name) => {
-                renderered_stage_name_chooser.set_active_id(Some(input_name));
+                final_stage_name_chooser.set_active_id(Some(input_name));
             }
             SampledInput::Mipmaps(input_name) => {
-                renderered_stage_name_chooser.set_active_id(Some(input_name));
+                final_stage_name_chooser.set_active_id(Some(input_name));
             }
         }
 
         {
-            let renderered_stage_name_chooser = renderered_stage_name_chooser.clone();
+            let final_stage_name_chooser = final_stage_name_chooser.clone();
             connect!(
                 relm,
-                renderered_stage_name_chooser,
+                final_stage_name_chooser,
                 connect_changed(_),
-                Some(Msg::UpdateRenderedTextureName)
+                Some(ConfigPanelMsg::UpdateRenderedTextureName)
             );
         }
 
         final_stage_row.add(&final_stage_label);
-        final_stage_row.add(&renderered_stage_name_chooser);
-
-        control_container.add(&final_stage_row);
-
-        let start_button = Button::new();
-        start_button.set_label("Start");
-        start_button.set_hexpand(true);
-        connect!(relm, start_button, connect_clicked(_), Some(Msg::Start));
-
-        control_container.add(&start_button);
+        final_stage_row.add(&final_stage_name_chooser);
 
         window_container.add(&tabs_container);
-        window_container.add(&control_container);
+        window_container.add(&final_stage_row);
 
-        MainPanel {
+        ConfigPanel {
             model,
 
             window_container,
@@ -640,9 +679,8 @@ impl Widget for MainPanel {
 
             render_stage_config_list_container,
             render_stage_config_widget_list,
-            render_stage_order,
 
-            renderered_stage_name_chooser,
+            final_stage_name_chooser,
 
             relm: relm.clone(),
         }

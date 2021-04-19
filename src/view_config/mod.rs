@@ -6,15 +6,12 @@ use gtk::{
 
 use relm::{connect, Relm};
 
-use crate::main_panel::Msg;
+use crate::config_panel::msg::ConfigPanelMsg;
+use crate::config_panel::view::ConfigPanel;
 
 use wvr_data::config::project_config::ViewConfig;
 
-pub fn build_view(
-    relm: &Relm<crate::main_panel::MainPanel>,
-    bpm: f64,
-    view_config: &ViewConfig,
-) -> gtk::Box {
+pub fn build_view(relm: &Relm<ConfigPanel>, bpm: f64, view_config: &ViewConfig) -> gtk::Box {
     let view_config_container = gtk::Box::new(Vertical, 2);
     view_config_container.set_property_margin(8);
 
@@ -25,8 +22,8 @@ pub fn build_view(
     padding.set_hexpand(true);
 
     let bpm_spin_button = SpinButton::new(
-        Some(&Adjustment::new(bpm, 0.0, 300.0, 0.01, 1.0, 1.0)),
-        0.01,
+        Some(&Adjustment::new(bpm, 0.0, 300.0, 0.01, 0.10, 1.0)),
+        1.0,
         2,
     );
     connect!(
@@ -34,7 +31,7 @@ pub fn build_view(
         bpm_spin_button,
         connect_changed(val),
         if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-            Some(Msg::SetBpm(value))
+            Some(ConfigPanelMsg::SetBpm(value))
         } else {
             None
         }
@@ -67,7 +64,7 @@ pub fn build_view(
         width_spin_button,
         connect_changed(val),
         if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-            Some(Msg::SetWidth(value as i64))
+            Some(ConfigPanelMsg::SetWidth(value as i64))
         } else {
             None
         }
@@ -100,7 +97,7 @@ pub fn build_view(
         height_spin_button,
         connect_changed(val),
         if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-            Some(Msg::SetHeight(value as i64))
+            Some(ConfigPanelMsg::SetHeight(value as i64))
         } else {
             None
         }
@@ -122,7 +119,7 @@ pub fn build_view(
         relm,
         fullscreen_switch,
         connect_property_active_notify(val),
-        Some(Msg::SetFullscreen(val.get_state()))
+        Some(ConfigPanelMsg::SetFullscreen(val.get_state()))
     );
 
     fullscreen_row.add(&Label::new(Some("Enable fullscreen: ")));
@@ -141,7 +138,7 @@ pub fn build_view(
         relm,
         dynamic_size_switch,
         connect_property_active_notify(val),
-        Some(Msg::SetDynamicResolution(val.get_state()))
+        Some(ConfigPanelMsg::SetDynamicResolution(val.get_state()))
     );
 
     dynamic_size_row.add(&Label::new(Some("Dynamic Resolution: ")));
@@ -160,7 +157,7 @@ pub fn build_view(
         relm,
         vsync_switch,
         connect_property_active_notify(val),
-        Some(Msg::SetVSync(val.get_state()))
+        Some(ConfigPanelMsg::SetVSync(val.get_state()))
     );
 
     vsync_row.add(&Label::new(Some("VSync: ")));
@@ -179,7 +176,7 @@ pub fn build_view(
         relm,
         screenshot_switch,
         connect_property_active_notify(val),
-        Some(Msg::SetScreenshot(val.get_state()))
+        Some(ConfigPanelMsg::SetScreenshot(val.get_state()))
     );
 
     screenshot_row.add(&Label::new(Some("Enable frame recording: ")));
@@ -201,7 +198,7 @@ pub fn build_view(
             1.0,
             1.0,
         )),
-        0.01,
+        1.0,
         2,
     );
     connect!(
@@ -209,7 +206,7 @@ pub fn build_view(
         target_fps_spin_button,
         connect_changed(val),
         if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-            Some(Msg::SetTargetFps(value))
+            Some(ConfigPanelMsg::SetTargetFps(value))
         } else {
             None
         }
@@ -221,7 +218,7 @@ pub fn build_view(
         relm,
         locked_speed_switch,
         connect_property_active_notify(val),
-        Some(Msg::SetLockedSpeed(val.get_state()))
+        Some(ConfigPanelMsg::SetLockedSpeed(val.get_state()))
     );
 
     locked_speed_row.add(&Label::new(Some("Lock Framerate: ")));

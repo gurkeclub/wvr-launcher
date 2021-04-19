@@ -1,6 +1,6 @@
 [package]
 name = "wvr-launcher"
-version = "0.1.11"
+version = "0.1.12"
 authors = ["gurke.club <contact@gurke.club>"]
 edition = "2018"
 
@@ -18,4 +18,10 @@ nfd2 = "0.2"
 strsim = "0.10"
 path-calculate = "0.1"
 
+glium = "0.29"
+gl_loader = "0.1.2"
+
+wvr-rendering = {git = "https://github.com/gurkeclub/wvr-rendering.git", branch="main"}
 wvr-data = {git = "https://github.com/gurkeclub/wvr-data.git", branch="main"}
+wvr-com = {git = "https://github.com/gurkeclub/wvr-com.git", branch="main"}
+wvr = {git = "https://github.com/gurkeclub/wvr.git", branch="main"}

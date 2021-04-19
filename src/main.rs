@@ -3,15 +3,16 @@
 use anyhow::Result;
 
 use relm::Widget;
-use relm_derive::Msg;
 
+mod config_panel;
 mod input_config;
-mod main_panel;
 mod main_window;
 mod server_config;
 mod stage_config;
+mod utils;
 mod view_config;
 mod welcome_panel;
+mod wvr_frame;
 
 use main_window::MainWindow;
 

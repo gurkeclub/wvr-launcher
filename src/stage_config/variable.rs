@@ -11,7 +11,7 @@ use relm::{connect, Relm};
 
 use wvr_data::{DataHolder, DataRange};
 
-use super::{RenderStageConfigView, RenderStageConfigViewMsg};
+use super::view::{RenderStageConfigView, RenderStageConfigViewMsg};
 
 pub fn create_int_spinner(
     relm: &Relm<RenderStageConfigView>,

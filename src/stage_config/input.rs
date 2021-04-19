@@ -6,7 +6,7 @@ use relm::{connect, Relm};
 
 use wvr_data::config::project_config::SampledInput;
 
-use super::{RenderStageConfigView, RenderStageConfigViewMsg};
+use super::view::{RenderStageConfigView, RenderStageConfigViewMsg};
 
 pub fn build_input_row(
     relm: &Relm<RenderStageConfigView>,

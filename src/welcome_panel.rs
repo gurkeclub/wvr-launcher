@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
     Adjustment, Align, Button, ButtonExt, ContainerExt, Grid, GridExt, Label, LabelExt,
-    OrientableExt, PolicyType, ScrolledWindow, ScrolledWindowExt, Separator, WidgetExt, WrapMode,
+    OrientableExt, PolicyType, ScrolledWindow, ScrolledWindowExt, Separator, WidgetExt,
 };
 
 use relm::{connect, Relm};
@@ -61,7 +61,6 @@ pub fn build_description_panel() -> gtk::Box {
     let description_widget = Label::new(Some(&description_text));
     description_widget.set_hexpand(true);
     description_widget.set_line_wrap(true);
-    description_widget.set_xalign(0.0);
     description_widget.set_halign(Align::Fill);
 
     description_panel.add(&description_widget);
@@ -70,6 +69,7 @@ pub fn build_description_panel() -> gtk::Box {
 }
 pub fn build_available_projects_panel(relm: &Relm<MainWindow>) -> gtk::Box {
     let available_projects_panel = gtk::Box::new(Vertical, 4);
+    available_projects_panel.set_hexpand(true);
 
     let available_projects_label = Label::new(Some("Available projects"));
     available_projects_label.set_xalign(0.0);
@@ -86,15 +86,16 @@ pub fn build_available_projects_panel(relm: &Relm<MainWindow>) -> gtk::Box {
     let mut row_index = 0;
     for project_path in &available_projects_list {
         if let Some(project_path_as_str) = project_path.to_str() {
+            let project_path_label = Label::new(Some(project_path_as_str));
+            project_path_label.set_hexpand(true);
+            project_path_label.set_xalign(0.0);
+
             let load_project_button = Button::new();
             load_project_button.set_label("Load");
             load_project_button.set_property_margin(4);
 
-            let project_path_label = Label::new(Some(project_path_as_str));
-            project_path_label.set_xalign(0.0);
-
-            available_projects_list_panel.attach(&project_path_label, 0, row_index, 1, 1);
-            available_projects_list_panel.attach(&load_project_button, 1, row_index, 1, 1);
+            available_projects_list_panel.attach(&load_project_button, 0, row_index, 1, 1);
+            available_projects_list_panel.attach(&project_path_label, 1, row_index, 1, 1);
 
             let project_path = project_path.clone();
             connect!(relm, load_project_button, connect_clicked(_), {
@@ -117,7 +118,7 @@ pub fn build_available_projects_panel(relm: &Relm<MainWindow>) -> gtk::Box {
     }
 
     let available_projects_list_wrapper = ScrolledWindow::new::<Adjustment, Adjustment>(None, None);
-    available_projects_list_wrapper.set_size_request(0, 240);
+    //available_projects_list_wrapper.set_size_request(0, 240);
     available_projects_list_wrapper.set_policy(PolicyType::Never, PolicyType::Automatic);
     available_projects_list_wrapper.set_hexpand(true);
     available_projects_list_wrapper.set_vexpand(true);
@@ -133,7 +134,7 @@ pub fn build_available_projects_panel(relm: &Relm<MainWindow>) -> gtk::Box {
 pub fn build_welcome_panel(relm: &Relm<MainWindow>) -> gtk::Box {
     let welcome_panel = gtk::Box::new(Vertical, 16);
     welcome_panel.set_property_margin(16);
-    //welcome_panel.add(&build_description_panel());
+    welcome_panel.add(&build_description_panel());
     welcome_panel.add(&build_available_projects_panel(relm));
 
     welcome_panel

@@ -8,12 +8,10 @@ use relm::{connect, Relm};
 
 use wvr_data::config::server_config::ServerConfig;
 
-use crate::main_panel::Msg;
+use crate::config_panel::msg::ConfigPanelMsg;
+use crate::config_panel::view::ConfigPanel;
 
-pub fn build_view(
-    relm: &Relm<crate::main_panel::MainPanel>,
-    server_config: &ServerConfig,
-) -> gtk::Box {
+pub fn build_view(relm: &Relm<ConfigPanel>, server_config: &ServerConfig) -> gtk::Box {
     let view_config_container = gtk::Box::new(Vertical, 4);
     view_config_container.set_property_margin(8);
 
@@ -29,7 +27,7 @@ pub fn build_view(
         relm,
         ip_entry,
         connect_changed(val),
-        Some(Msg::SetServerIp(val.get_text().to_string()))
+        Some(ConfigPanelMsg::SetServerIp(val.get_text().to_string()))
     );
 
     ip_row.add(&Label::new(Some("Server binding IP: ")));
@@ -59,7 +57,7 @@ pub fn build_view(
         width_spin_button,
         connect_changed(val),
         if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-            Some(Msg::SetServerPort(value as i64))
+            Some(ConfigPanelMsg::SetServerPort(value as i64))
         } else {
             None
         }
@@ -81,7 +79,7 @@ pub fn build_view(
         relm,
         enable_server_switch,
         connect_property_active_notify(val),
-        Some(Msg::SetServerEnabled(val.get_state()))
+        Some(ConfigPanelMsg::SetServerEnabled(val.get_state()))
     );
 
     enable_server_row.add(&Label::new(Some("Enable server: ")));
