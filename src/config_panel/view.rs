@@ -21,9 +21,7 @@ use strsim::levenshtein;
 
 use wvr_com::data::{Message, RenderStageUpdate};
 use wvr_data::config::project_config::ProjectConfig;
-use wvr_data::config::project_config::{
-    BufferPrecision, FilterMode, InputConfig, RenderStageConfig, SampledInput, Speed,
-};
+use wvr_data::config::project_config::{InputConfig, SampledInput, Speed};
 
 use crate::input_config;
 use crate::server_config;
@@ -39,12 +37,12 @@ use super::msg::ConfigPanelMsg;
 pub struct Model {
     parent_relm: Relm<crate::main_window::MainWindow>,
     project_path: PathBuf,
-    pub config: ProjectConfig,
+    config: ProjectConfig,
     control_channel: Option<Sender<Message>>,
 }
 
 pub struct ConfigPanel {
-    pub model: Model,
+    model: Model,
 
     window_container: gtk::Box,
 
@@ -52,9 +50,10 @@ pub struct ConfigPanel {
     input_config_widget_list:
         HashMap<Uuid, (String, InputConfig, Component<InputConfigView>, gtk::Box)>,
 
+    created_render_stage_count: usize,
     render_stage_config_list_container: Notebook,
-    pub render_stage_config_widget_list:
-        HashMap<Uuid, (usize, Component<RenderStageConfigView>, gtk::Box)>,
+    render_stage_config_widget_list: HashMap<Uuid, (Component<RenderStageConfigView>, gtk::Box)>,
+    render_stage_order: Vec<Uuid>,
 
     final_stage_name_chooser: ComboBoxText,
 
@@ -62,6 +61,14 @@ pub struct ConfigPanel {
 }
 
 impl ConfigPanel {
+    pub fn get_render_stage_index(&self, render_stage_id: &Uuid) -> Option<usize> {
+        self.render_stage_order
+            .iter()
+            .enumerate()
+            .find(|(_, candidate)| candidate == &render_stage_id)
+            .map(|(index, _)| index)
+    }
+
     fn save_config(&mut self, project_config_file_path: &Path) {
         println!("Saving to {:?}", project_config_file_path);
 
@@ -94,6 +101,12 @@ impl Update for ConfigPanel {
     }
 
     fn update(&mut self, event: ConfigPanelMsg) {
+        let mut render_stage_update_message_list = Vec::new();
+
+        if let Some(message) = event.to_wvr_message(self) {
+            render_stage_update_message_list.push(message);
+        }
+
         let mut input_list_changed = false;
 
         let input_choice_list = get_input_choice_list(&self.model.config);
@@ -274,27 +287,14 @@ impl Update for ConfigPanel {
                 input_list_changed = true;
             }
 
-            ConfigPanelMsg::AddRenderStage => {
-                let render_stage_name = format!(
-                    "Layer #{:}",
-                    self.render_stage_config_list_container.get_children().len()
-                );
-                let filter_name = "copy_image";
-
-                let render_stage_config = RenderStageConfig {
-                    name: render_stage_name,
-                    filter: filter_name.to_string(),
-                    filter_mode_params: FilterMode::Rectangle(0.0, 0.0, 0.0, 0.0),
-                    inputs: HashMap::new(),
-                    variables: HashMap::new(),
-                    precision: BufferPrecision::U8,
-                };
+            ConfigPanelMsg::AddRenderStage(render_stage_config) => {
+                self.created_render_stage_count += 1;
 
                 let (id, wrapper, render_stage_config_view) =
                     stage_config::build_render_stage_config_row(
                         &self.relm,
                         &self.model.project_path,
-                        &render_stage_config,
+                        render_stage_config,
                         &input_choice_list,
                     );
 
@@ -321,47 +321,53 @@ impl Update for ConfigPanel {
 
                 self.render_stage_config_list_container
                     .append_page(&wrapper, Some(&page_label_container));
+                self.render_stage_config_list_container
+                    .set_tab_reorderable(&wrapper, true);
 
                 page_label_container.show_all();
                 wrapper.show_all();
 
-                let render_stage_index = self.model.config.render_chain.len();
+                self.model
+                    .config
+                    .render_chain
+                    .push(render_stage_config.clone());
 
-                self.model.config.render_chain.push(render_stage_config);
+                self.render_stage_order.push(id);
 
                 self.render_stage_config_widget_list
-                    .insert(id, (render_stage_index, render_stage_config_view, wrapper));
+                    .insert(id, (render_stage_config_view, wrapper));
+
+                self.render_stage_config_list_container
+                    .set_current_page(Some(
+                        self.render_stage_config_list_container.get_n_pages() - 1,
+                    ))
             }
 
             ConfigPanelMsg::RemoveRenderStage(id) => {
-                let removed_index = None;
-
-                if let Some((render_stage_index, _, render_stage_config_view_wrapper)) =
+                if let Some((_, render_stage_config_view_wrapper)) =
                     self.render_stage_config_widget_list.get(&id)
                 {
-                    self.model.config.render_chain.remove(*render_stage_index);
-                    self.render_stage_config_list_container
-                        .remove(render_stage_config_view_wrapper);
-                }
-
-                if let Some(removed_index) = removed_index {
-                    for (ref mut render_stage_index, _, _) in
-                        self.render_stage_config_widget_list.values_mut()
-                    {
-                        if *render_stage_index > removed_index {
-                            *render_stage_index -= 1;
-                        }
+                    if let Some(render_stage_index) = self.get_render_stage_index(id) {
+                        self.model.config.render_chain.remove(render_stage_index);
+                        self.render_stage_config_list_container
+                            .remove(render_stage_config_view_wrapper);
                     }
                 }
 
                 self.render_stage_config_widget_list.remove(&id);
+                self.render_stage_order.remove(
+                    self.render_stage_order
+                        .iter()
+                        .enumerate()
+                        .find(|(_, candidate)| candidate == &id)
+                        .unwrap()
+                        .0,
+                );
             }
             ConfigPanelMsg::UpdateRenderStageVariable(id, variable_name, variable_value) => {
-                if let Some((render_stage_index, _, _)) =
-                    self.render_stage_config_widget_list.get(&id)
-                {
+                if let Some(render_stage_index) = self.get_render_stage_index(id) {
                     if let Some(ref mut config) =
-                        self.model.config.render_chain.get_mut(*render_stage_index)
+                        self.model.config.render_chain.get_mut(render_stage_index)
                     {
                         config
                             .variables
@@ -370,11 +376,9 @@ impl Update for ConfigPanel {
                 }
             }
             ConfigPanelMsg::UpdateRenderStageInput(id, input_name, new_input_value) => {
-                if let Some((render_stage_index, _, _)) =
-                    self.render_stage_config_widget_list.get(&id)
-                {
+                if let Some(render_stage_index) = self.get_render_stage_index(id) {
                     if let Some(ref mut config) =
-                        self.model.config.render_chain.get_mut(*render_stage_index)
+                        self.model.config.render_chain.get_mut(render_stage_index)
                     {
                         config
                             .inputs
@@ -383,18 +387,16 @@ impl Update for ConfigPanel {
                 }
             }
             ConfigPanelMsg::UpdateRenderStageFilterModeParams(id, new_filter_mode_params) => {
-                if let Some((render_stage_index, _, _)) =
-                    self.render_stage_config_widget_list.get(&id)
-                {
+                if let Some(render_stage_index) = self.get_render_stage_index(id) {
                     if let Some(ref mut config) =
-                        self.model.config.render_chain.get_mut(*render_stage_index)
+                        self.model.config.render_chain.get_mut(render_stage_index)
                     {
                         config.filter_mode_params = new_filter_mode_params.clone();
                     }
                 }
             }
             ConfigPanelMsg::UpdateRenderStageName(id, new_name) => {
-                if let Some((render_stage_index, _, render_stage_config_view_wrapper)) =
+                if let Some((_, render_stage_config_view_wrapper)) =
                     self.render_stage_config_widget_list.get(&id)
                 {
                     if let Ok(page_label_container) = self
@@ -410,38 +412,46 @@ impl Update for ConfigPanel {
                         }
                     }
 
-                    if let Some(ref mut config) =
-                        self.model.config.render_chain.get_mut(*render_stage_index)
-                    {
-                        if &config.name != new_name {
-                            config.name = new_name.clone();
-                            input_list_changed = true;
+                    if let Some(render_stage_index) = self.get_render_stage_index(id) {
+                        if let Some(ref mut config) =
+                            self.model.config.render_chain.get_mut(render_stage_index)
+                        {
+                            if &config.name != new_name {
+                                config.name = new_name.clone();
+                                input_list_changed = true;
+                            }
                         }
                     }
                 }
             }
             ConfigPanelMsg::UpdateRenderStageFilter(id, new_filter) => {
-                if let Some((render_stage_index, _, _)) =
-                    self.render_stage_config_widget_list.get(&id)
-                {
+                if let Some(render_stage_index) = self.get_render_stage_index(id) {
                     if let Some(ref mut config) =
-                        self.model.config.render_chain.get_mut(*render_stage_index)
+                        self.model.config.render_chain.get_mut(render_stage_index)
                     {
                         config.filter = new_filter.clone();
                     }
                 }
             }
+            ConfigPanelMsg::MoveStage(stage_id, target_index) => {
+                let original_index = self.get_render_stage_index(stage_id).unwrap();
 
-            ConfigPanelMsg::UpdateRenderedTextureName => {
-                self.model.config.final_stage.inputs.insert(
-                    "iChannel0".to_string(),
-                    SampledInput::Mipmaps(
-                        self.final_stage_name_chooser
-                            .get_active_id()
-                            .unwrap_or_else(|| glib::GString::from(""))
-                            .to_string(),
-                    ),
-                );
+                let render_stage_config = self.model.config.render_chain.remove(original_index);
+                self.model
+                    .config
+                    .render_chain
+                    .insert(*target_index, render_stage_config);
+
+                self.render_stage_order.remove(original_index);
+                self.render_stage_order.insert(*target_index, *stage_id);
+            }
+
+            ConfigPanelMsg::UpdateRenderedTextureName(input) => {
+                self.model
+                    .config
+                    .final_stage
+                    .inputs
+                    .insert("iChannel0".to_string(), input.clone());
             }
 
             ConfigPanelMsg::SetControlChannel(control_channel) => {
@@ -459,16 +469,9 @@ impl Update for ConfigPanel {
             }
         }
 
-        if let Some(message) = event.to_wvr_message(self) {
-            if let Some(control_channel) = &mut self.model.control_channel {
-                control_channel.send(message).unwrap();
-            }
-        }
-
         let new_input_choice_list = get_input_choice_list(&self.model.config);
         if new_input_choice_list != input_choice_list {
-            for (_, render_stage_config_widget, _) in self.render_stage_config_widget_list.values()
-            {
+            for (render_stage_config_widget, _) in self.render_stage_config_widget_list.values() {
                 render_stage_config_widget.emit(RenderStageConfigViewMsg::UpdateInputChoiceList(
                     new_input_choice_list.clone(),
                 ));
@@ -481,60 +484,63 @@ impl Update for ConfigPanel {
             };
 
             // Update input choice for rendered texture chooser
-            if let Some(mut closest_id) = new_input_choice_list.get(0) {
-                let mut closest_id_distance = levenshtein(&current_id, &closest_id);
+            match new_input_choice_list.get(0) {
+                Some(mut closest_id) => {
+                    let mut closest_id_distance = levenshtein(&current_id, &closest_id);
 
-                let input_name_store = self
-                    .final_stage_name_chooser
-                    .get_model()
-                    .unwrap()
-                    .downcast::<gtk::ListStore>()
-                    .unwrap();
-                input_name_store.clear();
+                    let input_name_store = self
+                        .final_stage_name_chooser
+                        .get_model()
+                        .unwrap()
+                        .downcast::<gtk::ListStore>()
+                        .unwrap();
+                    input_name_store.clear();
 
-                for name in &new_input_choice_list {
-                    input_name_store.insert_with_values(None, &[0, 1], &[name, name]);
+                    for name in &new_input_choice_list {
+                        input_name_store.insert_with_values(None, &[0, 1], &[name, name]);
 
-                    let candidate_id_distance = levenshtein(&current_id, &name);
+                        let candidate_id_distance = levenshtein(&current_id, &name);
 
-                    if candidate_id_distance < closest_id_distance {
-                        closest_id = name;
-                        closest_id_distance = candidate_id_distance;
+                        if candidate_id_distance < closest_id_distance {
+                            closest_id = name;
+                            closest_id_distance = candidate_id_distance;
+                        }
                     }
-                }
 
-                self.model.config.final_stage.inputs.insert(
-                    "iChannel0".to_string(),
-                    SampledInput::Mipmaps(closest_id.clone()),
-                );
-                self.final_stage_name_chooser
-                    .set_active_id(Some(&closest_id));
-            } else {
-                self.final_stage_name_chooser.set_active_id(None);
+                    let new_final_stage_input = SampledInput::Mipmaps(closest_id.clone());
+
+                    self.model
+                        .config
+                        .final_stage
+                        .inputs
+                        .insert("iChannel0".to_string(), new_final_stage_input.clone());
+                    self.final_stage_name_chooser
+                        .set_active_id(Some(&closest_id));
+
+                    render_stage_update_message_list.push(Message::UpdateFinalStage(
+                        RenderStageUpdate::Input("iChannel0".to_string(), new_final_stage_input),
+                    ));
+                }
+                None => {
+                    self.final_stage_name_chooser.set_active_id(None);
+                }
             }
 
-            let mut message_list = Vec::new();
             for (render_stage_index, render_stage_config) in
                 self.model.config.render_chain.iter().enumerate()
             {
                 for (input_name, input) in &render_stage_config.inputs {
-                    message_list.push(Message::UpdateRenderStage(
+                    render_stage_update_message_list.push(Message::UpdateRenderStage(
                         render_stage_index,
                         RenderStageUpdate::Input(input_name.clone(), input.clone()),
-                    ))
+                    ));
                 }
             }
-            if let Some(final_stage_input) = self.model.config.final_stage.inputs.get("iChannel0") {
-                message_list.push(Message::UpdateFinalStage(RenderStageUpdate::Input(
-                    "iChannel0".to_string(),
-                    final_stage_input.clone(),
-                )));
-            }
+        }
 
-            if let Some(control_channel) = &mut self.model.control_channel {
-                for message in message_list {
-                    control_channel.send(message).unwrap();
-                }
+        if let Some(control_channel) = &mut self.model.control_channel {
+            for message in render_stage_update_message_list {
+                control_channel.send(message).unwrap();
             }
         }
 
@@ -585,13 +591,14 @@ impl Widget for ConfigPanel {
 
         let render_stage_panel = gtk::Box::new(Vertical, 4);
 
-        let render_stage_config_list_container = stage_config::build_list_view(
-            relm,
-            &model.project_path,
-            &model.config.render_chain,
-            &get_input_choice_list(&model.config),
-            &mut render_stage_config_widget_list,
-        );
+        let (render_stage_config_list_container, render_stage_order) =
+            stage_config::build_list_view(
+                relm,
+                &model.project_path,
+                &model.config.render_chain,
+                &get_input_choice_list(&model.config),
+                &mut render_stage_config_widget_list,
+            );
 
         render_stage_panel.add(&render_stage_config_list_container);
 
@@ -657,8 +664,15 @@ impl Widget for ConfigPanel {
             connect!(
                 relm,
                 final_stage_name_chooser,
-                connect_changed(_),
-                Some(ConfigPanelMsg::UpdateRenderedTextureName)
+                connect_changed(chooser),
+                Some(ConfigPanelMsg::UpdateRenderedTextureName(
+                    SampledInput::Mipmaps(
+                        chooser
+                            .get_active_id()
+                            .unwrap_or_else(|| glib::GString::from(""))
+                            .to_string(),
+                    )
+                ))
             );
         }
 
@@ -668,7 +682,9 @@ impl Widget for ConfigPanel {
         window_container.add(&tabs_container);
         window_container.add(&final_stage_row);
 
-        ConfigPanel {
+        let created_render_stage_count = model.config.render_chain.len();
+
+        Self {
             model,
 
             window_container,
@@ -677,8 +693,10 @@ impl Widget for ConfigPanel {
 
             input_config_widget_list,
 
+            created_render_stage_count,
             render_stage_config_list_container,
             render_stage_config_widget_list,
+            render_stage_order,
 
             final_stage_name_chooser,
 

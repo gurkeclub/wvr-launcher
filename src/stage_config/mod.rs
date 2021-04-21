@@ -14,9 +14,11 @@ use gtk::{
     TreeModel, TreeModelExt, WidgetExt,
 };
 
-use relm::{connect, Component, ContainerWidget, Relm};
+use relm::{connect, Cast, Component, ContainerWidget, Relm};
 
-use wvr_data::config::project_config::{FilterConfig, RenderStageConfig};
+use wvr_data::config::project_config::{
+    BufferPrecision, FilterConfig, FilterMode, RenderStageConfig,
+};
 
 pub mod input;
 pub mod variable;
@@ -33,9 +35,11 @@ pub fn build_list_view(
     input_choice_list: &[String],
     render_stage_config_widget_list: &mut HashMap<
         Uuid,
-        (usize, Component<RenderStageConfigView>, gtk::Box),
+        (Component<RenderStageConfigView>, gtk::Box),
     >,
-) -> Notebook {
+) -> (Notebook, Vec<Uuid>) {
+    let mut render_stage_order = Vec::new();
+
     let render_stage_list_container = Notebook::new();
     render_stage_list_container.set_hexpand(true);
     render_stage_list_container.set_vexpand(true);
@@ -46,18 +50,25 @@ pub fn build_list_view(
     let add_render_stage_button = Button::new();
     add_render_stage_button.set_label("+");
     add_render_stage_button.set_property_margin(4);
-    connect!(
-        relm,
-        add_render_stage_button,
-        connect_clicked(_),
-        Some(ConfigPanelMsg::AddRenderStage)
-    );
+    connect!(relm, add_render_stage_button, connect_clicked(_), {
+        let render_stage_name = "New layer".to_string();
+        let filter_name = "copy_input";
+        let render_stage_config = RenderStageConfig {
+            name: render_stage_name,
+            filter: filter_name.to_string(),
+            filter_mode_params: FilterMode::Rectangle(0.0, 0.0, 0.0, 0.0),
+            inputs: HashMap::new(),
+            variables: HashMap::new(),
+            precision: BufferPrecision::U8,
+        };
+        Some(ConfigPanelMsg::AddRenderStage(render_stage_config))
+    });
 
     add_render_stage_button.show_all();
 
     render_stage_list_container.set_action_widget(&add_render_stage_button, PackType::End);
 
-    for (render_stage_index, render_stage_config) in render_stage_config_list.iter().enumerate() {
+    for render_stage_config in render_stage_config_list {
         let (id, wrapper, render_stage_config_view) = build_render_stage_config_row(
             relm,
             project_path,
@@ -87,13 +98,31 @@ pub fn build_list_view(
         page_label_container.add(&page_label);
 
         render_stage_list_container.append_page(&wrapper, Some(&page_label_container));
+        render_stage_list_container.set_tab_reorderable(&wrapper, true);
+        {
+            let wrapper = wrapper.clone();
+            connect!(
+                relm,
+                render_stage_list_container,
+                connect_page_reordered(_, widget, target_index),
+                {
+                    if widget == &wrapper.clone().upcast::<gtk::Widget>() {
+                        println!("moved {:} to {:}", &id, &target_index);
+
+                        Some(ConfigPanelMsg::MoveStage(id, target_index as usize))
+                    } else {
+                        None
+                    }
+                }
+            );
+        }
         page_label_container.show_all();
 
-        render_stage_config_widget_list
-            .insert(id, (render_stage_index, render_stage_config_view, wrapper));
+        render_stage_config_widget_list.insert(id, (render_stage_config_view, wrapper));
+        render_stage_order.push(id.clone());
     }
 
-    render_stage_list_container
+    (render_stage_list_container, render_stage_order)
 }
 
 pub fn build_render_stage_config_row(

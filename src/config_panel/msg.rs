@@ -1,4 +1,3 @@
-use std::convert::TryInto;
 use std::sync::mpsc::Sender;
 
 use uuid::Uuid;
@@ -6,7 +5,7 @@ use uuid::Uuid;
 use relm_derive::Msg;
 
 use wvr_com::data::{Message, RenderStageUpdate, SetInfo};
-use wvr_data::config::project_config::{FilterMode, InputConfig, SampledInput};
+use wvr_data::config::project_config::{FilterMode, InputConfig, RenderStageConfig, SampledInput};
 use wvr_data::DataHolder;
 
 use super::view::ConfigPanel;
@@ -34,17 +33,18 @@ pub enum ConfigPanelMsg {
     UpdateInputConfig(Uuid, String, InputConfig),
     RemoveInput(Uuid),
 
-    AddRenderStage,
+    AddRenderStage(RenderStageConfig),
     UpdateRenderStageFilter(Uuid, String),
     UpdateRenderStageFilterModeParams(Uuid, FilterMode),
     UpdateRenderStageVariable(Uuid, String, DataHolder),
     UpdateRenderStageInput(Uuid, String, SampledInput),
     UpdateRenderStageName(Uuid, String),
+    MoveStage(Uuid, usize),
     RemoveRenderStage(Uuid),
 
     SetControlChannel(Sender<Message>),
 
-    UpdateRenderedTextureName,
+    UpdateRenderedTextureName(SampledInput),
 
     Save,
 }
@@ -81,19 +81,18 @@ impl ConfigPanelMsg {
             ConfigPanelMsg::UpdateInputConfig(input_id, input_name, input_config) => None,
             ConfigPanelMsg::RemoveInput(input_id) => None,
 
-            ConfigPanelMsg::AddRenderStage => {
-                if let Some(render_stage_config) = config_panel.model.config.render_chain.last() {
-                    Some(Message::AddRenderStage(render_stage_config.clone()))
-                } else {
-                    None
-                }
+            ConfigPanelMsg::AddRenderStage(render_stage_config) => {
+                Some(Message::AddRenderStage(render_stage_config.clone()))
+            }
+            ConfigPanelMsg::MoveStage(stage_id, target_index) => {
+                let original_index = config_panel.get_render_stage_index(stage_id).unwrap();
+
+                Some(Message::MoveRenderStage(original_index, *target_index))
             }
             ConfigPanelMsg::UpdateRenderStageFilter(stage_id, filter_name) => {
-                if let Some((stage_index, _, _)) =
-                    config_panel.render_stage_config_widget_list.get(stage_id)
-                {
+                if let Some(stage_index) = config_panel.get_render_stage_index(stage_id) {
                     Some(Message::UpdateRenderStage(
-                        *stage_index,
+                        stage_index,
                         RenderStageUpdate::Filter(filter_name.clone()),
                     ))
                 } else {
@@ -101,11 +100,9 @@ impl ConfigPanelMsg {
                 }
             }
             ConfigPanelMsg::UpdateRenderStageFilterModeParams(stage_id, filter_mode_params) => {
-                if let Some((stage_index, _, _)) =
-                    config_panel.render_stage_config_widget_list.get(stage_id)
-                {
+                if let Some(stage_index) = config_panel.get_render_stage_index(stage_id) {
                     Some(Message::UpdateRenderStage(
-                        *stage_index,
+                        stage_index,
                         RenderStageUpdate::FilterModeParams(filter_mode_params.clone()),
                     ))
                 } else {
@@ -113,11 +110,9 @@ impl ConfigPanelMsg {
                 }
             }
             ConfigPanelMsg::UpdateRenderStageVariable(stage_id, variable_name, variable_value) => {
-                if let Some((stage_index, _, _)) =
-                    config_panel.render_stage_config_widget_list.get(stage_id)
-                {
+                if let Some(stage_index) = config_panel.get_render_stage_index(stage_id) {
                     Some(Message::UpdateRenderStage(
-                        *stage_index,
+                        stage_index,
                         RenderStageUpdate::Variable(variable_name.clone(), variable_value.clone()),
                     ))
                 } else {
@@ -125,11 +120,9 @@ impl ConfigPanelMsg {
                 }
             }
             ConfigPanelMsg::UpdateRenderStageInput(stage_id, input_name, input) => {
-                if let Some((stage_index, _, _)) =
-                    config_panel.render_stage_config_widget_list.get(stage_id)
-                {
+                if let Some(stage_index) = config_panel.get_render_stage_index(stage_id) {
                     Some(Message::UpdateRenderStage(
-                        *stage_index,
+                        stage_index,
                         RenderStageUpdate::Input(input_name.clone(), input.clone()),
                     ))
                 } else {
@@ -137,11 +130,9 @@ impl ConfigPanelMsg {
                 }
             }
             ConfigPanelMsg::UpdateRenderStageName(stage_id, name) => {
-                if let Some((stage_index, _, _)) =
-                    config_panel.render_stage_config_widget_list.get(stage_id)
-                {
+                if let Some(stage_index) = config_panel.get_render_stage_index(stage_id) {
                     Some(Message::UpdateRenderStage(
-                        *stage_index,
+                        stage_index,
                         RenderStageUpdate::Name(name.clone()),
                     ))
                 } else {
@@ -149,30 +140,18 @@ impl ConfigPanelMsg {
                 }
             }
             ConfigPanelMsg::RemoveRenderStage(stage_id) => {
-                if let Some((stage_index, _, _)) =
-                    config_panel.render_stage_config_widget_list.get(stage_id)
-                {
-                    Some(Message::RemoveRenderStage(*stage_index))
+                if let Some(stage_index) = config_panel.get_render_stage_index(stage_id) {
+                    Some(Message::RemoveRenderStage(stage_index))
                 } else {
                     None
                 }
             }
 
-            ConfigPanelMsg::UpdateRenderedTextureName => {
-                if let Some(final_stage_input) = config_panel
-                    .model
-                    .config
-                    .final_stage
-                    .inputs
-                    .get("iChannel0")
-                {
-                    Some(Message::UpdateFinalStage(RenderStageUpdate::Input(
-                        "iChannel0".to_string(),
-                        final_stage_input.clone(),
-                    )))
-                } else {
-                    None
-                }
+            ConfigPanelMsg::UpdateRenderedTextureName(final_stage_input) => {
+                Some(Message::UpdateFinalStage(RenderStageUpdate::Input(
+                    "iChannel0".to_string(),
+                    final_stage_input.clone(),
+                )))
             }
             _ => None,
         }

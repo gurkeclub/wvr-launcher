@@ -151,13 +151,15 @@ pub fn build_wvr_frame(
                     .unwrap();
             }
 
-            glarea.queue_draw();
-
             Inhibit(true)
         });
     }
 
-    glarea.queue_draw();
+    let glarea = glarea.clone();
+    glib::source::timeout_add_local(1_000 / 60, move || {
+        glarea.queue_draw();
+        glib::source::Continue(true)
+    });
 
     Ok(order_sender)
 }

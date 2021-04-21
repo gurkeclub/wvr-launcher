@@ -220,7 +220,13 @@ impl RenderStageConfigView {
                 self.filter_config_container.remove(children);
             }
 
-            let default_input = SampledInput::Linear(self.model.input_choice_list[0].clone());
+            let default_input = SampledInput::Linear(
+                self.model
+                    .input_choice_list
+                    .get(0)
+                    .map(String::clone)
+                    .unwrap_or_default(),
+            );
 
             let mut uniform_name_list = filter_config.inputs.clone();
             uniform_name_list.sort();
