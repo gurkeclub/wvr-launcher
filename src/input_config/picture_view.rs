@@ -3,6 +3,8 @@ use std::{
     str::FromStr,
 };
 
+use uuid::Uuid;
+
 use gdk::RGBA;
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
@@ -14,14 +16,16 @@ use gtk::{
 use relm::{connect, Relm};
 use wvr_data::config::project_config::InputConfig;
 
-use super::InputConfigView;
-use super::InputConfigViewModel;
+use crate::config_panel::{msg::ConfigPanelMsg, view::ConfigPanel};
+
 use super::InputConfigViewMsg;
 
 pub fn build_picture_view(
-    relm: &Relm<InputConfigView>,
+    relm: &Relm<ConfigPanel>,
     project_path: &Path,
-    model: &InputConfigViewModel,
+    id: Uuid,
+    name: &str,
+    config: &InputConfig,
 ) -> gtk::Box {
     let root = gtk::Box::new(Vertical, 0);
     root.override_background_color(
@@ -38,7 +42,7 @@ pub fn build_picture_view(
         path,
         width,
         height,
-    } = &model.config
+    } = &config
     {
         let name_row = gtk::Box::new(Horizontal, 8);
         name_row.set_property_margin(8);
@@ -48,13 +52,16 @@ pub fn build_picture_view(
         name_label.set_size_request(48, 0);
 
         let name_entry = Entry::new();
-        name_entry.set_text(&model.name);
+        name_entry.set_text(name);
         name_entry.set_hexpand(true);
         connect!(
             relm,
             name_entry,
             connect_changed(val),
-            Some(InputConfigViewMsg::SetName(val.get_text().to_string()))
+            ConfigPanelMsg::UpdateInput(
+                id,
+                InputConfigViewMsg::SetName(val.get_text().to_string())
+            )
         );
 
         name_row.add(&name_label);
@@ -88,8 +95,9 @@ pub fn build_picture_view(
             picture_path,
             connect_file_set(val),
             if let Some(path) = val.get_filename() {
-                Some(InputConfigViewMsg::SetPath(
-                    path.to_str().unwrap().to_string(),
+                Some(ConfigPanelMsg::UpdateInput(
+                    id,
+                    InputConfigViewMsg::SetPath(path.to_str().unwrap().to_string()),
                 ))
             } else {
                 None
@@ -125,7 +133,10 @@ pub fn build_picture_view(
             width_spin_button,
             connect_changed(val),
             if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-                Some(InputConfigViewMsg::SetWidth(value as i64))
+                Some(ConfigPanelMsg::UpdateInput(
+                    id,
+                    InputConfigViewMsg::SetWidth(value as i64),
+                ))
             } else {
                 None
             }
@@ -149,7 +160,10 @@ pub fn build_picture_view(
             height_spin_button,
             connect_changed(val),
             if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-                Some(InputConfigViewMsg::SetHeight(value as i64))
+                Some(ConfigPanelMsg::UpdateInput(
+                    id,
+                    InputConfigViewMsg::SetHeight(value as i64),
+                ))
             } else {
                 None
             }
@@ -163,9 +177,9 @@ pub fn build_picture_view(
         root.add(&name_row);
         root.add(&picture_path_row);
         root.add(&resolution_row);
-    } else {
-        panic!("Cannot build a picture config view from {:?}", model.config);
-    }
 
-    root
+        root
+    } else {
+        panic!("Cannot build a picture config view from {:?}", config);
+    }
 }

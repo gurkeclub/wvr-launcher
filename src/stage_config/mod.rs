@@ -119,7 +119,7 @@ pub fn build_list_view(
         page_label_container.show_all();
 
         render_stage_config_widget_list.insert(id, (render_stage_config_view, wrapper));
-        render_stage_order.push(id.clone());
+        render_stage_order.push(id);
     }
 
     (render_stage_list_container, render_stage_order)

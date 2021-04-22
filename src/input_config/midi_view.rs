@@ -1,3 +1,5 @@
+use uuid::Uuid;
+
 use gdk::RGBA;
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{ContainerExt, EditableSignals, Entry, EntryExt, Label, LabelExt, StateFlags, WidgetExt};
@@ -5,11 +7,16 @@ use gtk::{ContainerExt, EditableSignals, Entry, EntryExt, Label, LabelExt, State
 use relm::{connect, Relm};
 use wvr_data::config::project_config::InputConfig;
 
-use super::InputConfigView;
-use super::InputConfigViewModel;
+use crate::config_panel::{msg::ConfigPanelMsg, view::ConfigPanel};
+
 use super::InputConfigViewMsg;
 
-pub fn build_midi_view(relm: &Relm<InputConfigView>, model: &InputConfigViewModel) -> gtk::Box {
+pub fn build_midi_view(
+    relm: &Relm<ConfigPanel>,
+    id: Uuid,
+    name: &str,
+    config: &InputConfig,
+) -> gtk::Box {
     let root = gtk::Box::new(Vertical, 0);
     root.override_background_color(
         StateFlags::NORMAL,
@@ -21,7 +28,7 @@ pub fn build_midi_view(relm: &Relm<InputConfigView>, model: &InputConfigViewMode
         }),
     );
 
-    if let InputConfig::Midi { name } = &model.config {
+    if let InputConfig::Midi { name: pattern } = config {
         let name_row = gtk::Box::new(Horizontal, 8);
         name_row.set_property_margin(8);
 
@@ -30,13 +37,16 @@ pub fn build_midi_view(relm: &Relm<InputConfigView>, model: &InputConfigViewMode
         name_label.set_size_request(48, 0);
 
         let name_entry = Entry::new();
-        name_entry.set_text(&model.name);
+        name_entry.set_text(pattern);
         name_entry.set_hexpand(true);
         connect!(
             relm,
             name_entry,
             connect_changed(val),
-            Some(InputConfigViewMsg::SetName(val.get_text().to_string()))
+            ConfigPanelMsg::UpdateInput(
+                id,
+                InputConfigViewMsg::SetName(val.get_text().to_string())
+            )
         );
 
         name_row.add(&name_label);
@@ -57,7 +67,10 @@ pub fn build_midi_view(relm: &Relm<InputConfigView>, model: &InputConfigViewMode
             relm,
             id_pattern,
             connect_changed(val),
-            Some(InputConfigViewMsg::SetPath(val.get_text().to_string()))
+            ConfigPanelMsg::UpdateInput(
+                id,
+                InputConfigViewMsg::SetPath(val.get_text().to_string())
+            )
         );
 
         id_pattern_row.add(&id_pattern_label);
@@ -65,9 +78,9 @@ pub fn build_midi_view(relm: &Relm<InputConfigView>, model: &InputConfigViewMode
 
         root.add(&name_row);
         root.add(&id_pattern_row);
-    } else {
-        panic!("Cannot build a camera config view from {:?}", model.config);
-    }
 
-    root
+        root
+    } else {
+        panic!("Cannot build a camera config view from {:?}", config);
+    }
 }

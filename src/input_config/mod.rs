@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use uuid::Uuid;
 
@@ -13,11 +13,9 @@ use gtk::{
     PolicyType,
 };
 
-use relm::{connect, Component, ContainerWidget, Relm, Update, Widget};
+use relm::{connect, Relm};
 use relm_derive::Msg;
 use wvr_data::config::project_config::{InputConfig, Speed};
-
-use path_calculate::*;
 
 use crate::config_panel::msg::ConfigPanelMsg;
 use crate::config_panel::view::ConfigPanel;
@@ -25,15 +23,13 @@ use crate::config_panel::view::ConfigPanel;
 pub mod cam_view;
 pub mod midi_view;
 pub mod picture_view;
+mod utils;
 pub mod video_view;
 
 pub fn build_list_view(
     relm: &Relm<ConfigPanel>,
     project_path: &Path,
-    input_config_widget_list: &mut HashMap<
-        Uuid,
-        (String, InputConfig, Component<InputConfigView>, gtk::Box),
-    >,
+    input_config_widget_list: &mut HashMap<Uuid, (String, InputConfig, gtk::Box)>,
     input_config_list: &HashMap<String, InputConfig>,
 ) -> (gtk::Box, gtk::Box) {
     let input_list_panel = gtk::Box::new(Vertical, 4);
@@ -48,7 +44,14 @@ pub fn build_list_view(
         relm,
         add_cam_button,
         connect_clicked(_),
-        Some(ConfigPanelMsg::AddCamInput)
+        Some(ConfigPanelMsg::AddInput(
+            "New Camera".to_string(),
+            InputConfig::Cam {
+                path: "/dev/video0".to_string(),
+                width: 640,
+                height: 480,
+            }
+        ))
     );
 
     let add_video_button = Button::new();
@@ -58,7 +61,7 @@ pub fn build_list_view(
         relm,
         add_video_button,
         connect_clicked(_),
-        Some(ConfigPanelMsg::AddVideoInput)
+        utils::create_video_input_config()
     );
 
     let add_picture_button = Button::new();
@@ -68,7 +71,7 @@ pub fn build_list_view(
         relm,
         add_picture_button,
         connect_clicked(_),
-        Some(ConfigPanelMsg::AddPictureInput)
+        utils::create_picture_input_config()
     );
 
     let add_midi_button = Button::new();
@@ -78,7 +81,12 @@ pub fn build_list_view(
         relm,
         add_midi_button,
         connect_clicked(_),
-        Some(ConfigPanelMsg::AddMidiInput)
+        Some(ConfigPanelMsg::AddInput(
+            "New Controller".to_string(),
+            InputConfig::Midi {
+                name: "*".to_string(),
+            }
+        ))
     );
 
     input_list_control_container.add(&add_cam_button);
@@ -89,18 +97,10 @@ pub fn build_list_view(
     let input_list_container = gtk::Box::new(Vertical, 16);
 
     for (input_name, input_config) in input_config_list.iter() {
-        let (id, wrapper, input_config_view) =
-            build_input_config_row(relm, project_path, input_name, &input_config);
+        let (id, wrapper) = build_input_config_row(relm, project_path, input_name, &input_config);
+
         input_list_container.add(&wrapper);
-        input_config_widget_list.insert(
-            id,
-            (
-                input_name.clone(),
-                input_config.clone(),
-                input_config_view,
-                wrapper,
-            ),
-        );
+        input_config_widget_list.insert(id, (input_name.clone(), input_config.clone(), wrapper));
     }
 
     let input_list_container_wrapper = ScrolledWindow::new::<Adjustment, Adjustment>(None, None);
@@ -120,7 +120,7 @@ pub fn build_input_config_row(
     project_path: &Path,
     input_name: &str,
     input_config: &InputConfig,
-) -> (Uuid, gtk::Box, Component<InputConfigView>) {
+) -> (Uuid, gtk::Box) {
     let id = Uuid::new_v4();
     let wrapper = gtk::Box::new(Horizontal, 2);
     let (label_name, label_color) = match input_config {
@@ -176,158 +176,28 @@ pub fn build_input_config_row(
     );
 
     wrapper.add(&row_label);
-    let input_config_view = wrapper.add_widget::<InputConfigView>((
-        project_path.to_owned(),
-        id,
-        input_name.to_string(),
-        input_config.clone(),
-        relm.clone(),
-    ));
+    let input_config_view = match input_config {
+        InputConfig::Cam { .. } => cam_view::build_cam_view(relm, id, input_name, input_config),
+        InputConfig::Video { .. } => {
+            video_view::build_video_view(relm, &project_path, id, input_name, input_config)
+        }
+        InputConfig::Midi { .. } => midi_view::build_midi_view(relm, id, input_name, input_config),
+        InputConfig::Picture { .. } => {
+            picture_view::build_picture_view(relm, &project_path, id, input_name, input_config)
+        }
+    };
+
+    wrapper.add(&input_config_view);
     wrapper.add(&remove_button);
 
-    (id, wrapper, input_config_view)
+    (id, wrapper)
 }
 
-#[derive(Msg)]
+#[derive(Msg, Debug)]
 pub enum InputConfigViewMsg {
     SetName(String),
     SetWidth(i64),
     SetHeight(i64),
     SetPath(String),
-    SetSpeedIsBpm(bool),
-    SetSpeed(f64),
-}
-
-pub struct InputConfigViewModel {
-    parent_relm: Relm<ConfigPanel>,
-    project_path: PathBuf,
-    id: Uuid,
-    name: String,
-    config: InputConfig,
-}
-pub struct InputConfigView {
-    model: InputConfigViewModel,
-    root: gtk::Box,
-}
-
-impl Update for InputConfigView {
-    type Model = InputConfigViewModel;
-    type ModelParam = (PathBuf, Uuid, String, InputConfig, Relm<ConfigPanel>);
-    type Msg = InputConfigViewMsg;
-
-    fn model(
-        _: &Relm<Self>,
-        model: (PathBuf, Uuid, String, InputConfig, Relm<ConfigPanel>),
-    ) -> Self::Model {
-        InputConfigViewModel {
-            project_path: model.0,
-            id: model.1,
-            name: model.2,
-            config: model.3,
-            parent_relm: model.4,
-        }
-    }
-
-    fn update(&mut self, event: InputConfigViewMsg) {
-        match &mut self.model.config {
-            InputConfig::Cam {
-                path,
-                width,
-                height,
-            } => match event {
-                InputConfigViewMsg::SetName(new_name) => self.model.name = new_name,
-                InputConfigViewMsg::SetPath(new_path) => *path = new_path,
-                InputConfigViewMsg::SetHeight(new_height) => *height = new_height as usize,
-                InputConfigViewMsg::SetWidth(new_width) => *width = new_width as usize,
-                _ => unreachable!(),
-            },
-            InputConfig::Video {
-                path,
-                width,
-                height,
-                speed,
-            } => match event {
-                InputConfigViewMsg::SetName(new_name) => self.model.name = new_name,
-                InputConfigViewMsg::SetPath(new_path) => {
-                    if let Ok(new_path) =
-                        PathBuf::from(new_path).related_to(&self.model.project_path)
-                    {
-                        *path = new_path.to_str().unwrap().to_string();
-                    }
-                }
-                InputConfigViewMsg::SetHeight(new_height) => *height = new_height as usize,
-                InputConfigViewMsg::SetWidth(new_width) => *width = new_width as usize,
-                InputConfigViewMsg::SetSpeed(new_speed) => {
-                    *speed = match speed {
-                        Speed::Beats(_) => Speed::Beats(new_speed as f32),
-                        Speed::Fps(_) => Speed::Fps(new_speed as f32),
-                    }
-                }
-
-                InputConfigViewMsg::SetSpeedIsBpm(speed_is_bpm) => {
-                    let old_speed = match speed {
-                        Speed::Beats(speed) => *speed,
-                        Speed::Fps(speed) => *speed,
-                    };
-                    *speed = if speed_is_bpm {
-                        Speed::Beats(old_speed)
-                    } else {
-                        Speed::Fps(old_speed)
-                    };
-                }
-            },
-
-            InputConfig::Picture {
-                path,
-                width,
-                height,
-            } => match event {
-                InputConfigViewMsg::SetName(new_name) => self.model.name = new_name,
-                InputConfigViewMsg::SetPath(new_path) => {
-                    if let Ok(new_path) =
-                        PathBuf::from(new_path).related_to(&self.model.project_path)
-                    {
-                        *path = new_path.to_str().unwrap().to_string();
-                    }
-                }
-                InputConfigViewMsg::SetHeight(new_height) => *height = new_height as usize,
-                InputConfigViewMsg::SetWidth(new_width) => *width = new_width as usize,
-                _ => unreachable!(),
-            },
-            InputConfig::Midi { name } => match event {
-                InputConfigViewMsg::SetName(new_name) => self.model.name = new_name,
-                InputConfigViewMsg::SetPath(new_path) => *name = new_path,
-                _ => unreachable!(),
-            },
-        }
-
-        self.model.parent_relm.stream().emit(ConfigPanelMsg::UpdateInputConfig(
-            self.model.id,
-            self.model.name.clone(),
-            self.model.config.clone(),
-        ));
-    }
-}
-
-impl Widget for InputConfigView {
-    type Root = gtk::Box;
-
-    fn root(&self) -> Self::Root {
-        self.root.clone()
-    }
-
-    fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
-        let root = match model.config {
-            InputConfig::Cam { .. } => cam_view::build_cam_view(relm, &model),
-            InputConfig::Video { .. } => {
-                video_view::build_video_view(relm, &model.project_path, &model)
-            }
-            InputConfig::Midi { .. } => midi_view::build_midi_view(relm, &model),
-            InputConfig::Picture { .. } => {
-                picture_view::build_picture_view(relm, &model.project_path, &model)
-            }
-        };
-
-        Self { model, root }
-    }
+    SetSpeed(Speed),
 }

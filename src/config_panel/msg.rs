@@ -4,11 +4,12 @@ use uuid::Uuid;
 
 use relm_derive::Msg;
 
-use wvr_com::data::{Message, RenderStageUpdate, SetInfo};
+use wvr_com::data::{InputUpdate, Message, RenderStageUpdate, SetInfo};
 use wvr_data::config::project_config::{FilterMode, InputConfig, RenderStageConfig, SampledInput};
 use wvr_data::DataHolder;
 
 use super::view::ConfigPanel;
+use crate::input_config::InputConfigViewMsg;
 
 #[derive(Msg, Debug)]
 pub enum ConfigPanelMsg {
@@ -26,11 +27,8 @@ pub enum ConfigPanelMsg {
     SetServerPort(i64),
     SetServerEnabled(bool),
 
-    AddPictureInput,
-    AddCamInput,
-    AddVideoInput,
-    AddMidiInput,
-    UpdateInputConfig(Uuid, String, InputConfig),
+    AddInput(String, InputConfig),
+    UpdateInput(Uuid, InputConfigViewMsg),
     RemoveInput(Uuid),
 
     AddRenderStage(RenderStageConfig),
@@ -74,12 +72,44 @@ impl ConfigPanelMsg {
                 Some(Message::Set(SetInfo::LockedSpeed(*locked_speed)))
             }
 
-            ConfigPanelMsg::AddPictureInput => None,
-            ConfigPanelMsg::AddCamInput => None,
-            ConfigPanelMsg::AddVideoInput => None,
-            ConfigPanelMsg::AddMidiInput => None,
-            ConfigPanelMsg::UpdateInputConfig(input_id, input_name, input_config) => None,
-            ConfigPanelMsg::RemoveInput(input_id) => None,
+            ConfigPanelMsg::AddInput(input_name, input_config) => {
+                Some(Message::AddInput(input_name.clone(), input_config.clone()))
+            }
+            ConfigPanelMsg::UpdateInput(input_id, input_update_message) => {
+                if let Some(input_name) = config_panel.get_input_name(input_id) {
+                    if let InputConfigViewMsg::SetName(new_name) = input_update_message {
+                        Some(Message::RenameInput(input_name, new_name.clone()))
+                    } else {
+                        Some(Message::UpdateInput(
+                            input_name,
+                            match input_update_message {
+                                InputConfigViewMsg::SetWidth(width) => {
+                                    InputUpdate::SetWidth(*width as usize)
+                                }
+                                InputConfigViewMsg::SetHeight(height) => {
+                                    InputUpdate::SetHeight(*height as usize)
+                                }
+                                InputConfigViewMsg::SetPath(path) => {
+                                    InputUpdate::SetPath(path.clone())
+                                }
+                                InputConfigViewMsg::SetSpeed(speed) => {
+                                    InputUpdate::SetSpeed(*speed)
+                                }
+                                InputConfigViewMsg::SetName(_) => unreachable!(),
+                            },
+                        ))
+                    }
+                } else {
+                    None
+                }
+            }
+            ConfigPanelMsg::RemoveInput(input_id) => {
+                if let Some(input_name) = config_panel.get_input_name(input_id) {
+                    Some(Message::RemoveInput(input_name))
+                } else {
+                    None
+                }
+            }
 
             ConfigPanelMsg::AddRenderStage(render_stage_config) => {
                 Some(Message::AddRenderStage(render_stage_config.clone()))

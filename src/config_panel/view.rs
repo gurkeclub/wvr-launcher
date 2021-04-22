@@ -17,18 +17,19 @@ use gtk::{
 
 use relm::{connect, Component, Relm, Update, Widget};
 
+use path_calculate::Calculate;
 use strsim::levenshtein;
 
 use wvr_com::data::{Message, RenderStageUpdate};
 use wvr_data::config::project_config::ProjectConfig;
-use wvr_data::config::project_config::{InputConfig, SampledInput, Speed};
+use wvr_data::config::project_config::{InputConfig, SampledInput};
 
 use crate::input_config;
 use crate::server_config;
 use crate::stage_config;
 use crate::view_config;
 
-use crate::input_config::InputConfigView;
+use crate::input_config::InputConfigViewMsg;
 use crate::stage_config::view::{RenderStageConfigView, RenderStageConfigViewMsg};
 
 use super::get_input_choice_list;
@@ -47,8 +48,7 @@ pub struct ConfigPanel {
     window_container: gtk::Box,
 
     input_list_container: gtk::Box,
-    input_config_widget_list:
-        HashMap<Uuid, (String, InputConfig, Component<InputConfigView>, gtk::Box)>,
+    input_config_widget_list: HashMap<Uuid, (String, InputConfig, gtk::Box)>,
 
     created_render_stage_count: usize,
     render_stage_config_list_container: Notebook,
@@ -67,6 +67,12 @@ impl ConfigPanel {
             .enumerate()
             .find(|(_, candidate)| candidate == &render_stage_id)
             .map(|(index, _)| index)
+    }
+
+    pub fn get_input_name(&self, input_id: &Uuid) -> Option<String> {
+        self.input_config_widget_list
+            .get(input_id)
+            .map(|(input_name, _, _)| input_name.clone())
     }
 
     fn save_config(&mut self, project_config_file_path: &Path) {
@@ -148,23 +154,8 @@ impl Update for ConfigPanel {
                 self.save_config(&self.model.project_path.join("config.json"));
             }
 
-            ConfigPanelMsg::AddCamInput => {
-                let input_cam_count = self
-                    .input_config_widget_list
-                    .values()
-                    .filter(|(_, input_config, _, _)| input_config.is_cam())
-                    .map(|_| 1)
-                    .sum::<usize>();
-
-                let input_name = format!("Camera #{:}", input_cam_count + 1);
-
-                let input_config = InputConfig::Cam {
-                    path: "/dev/video0".to_string(),
-                    width: 640,
-                    height: 480,
-                };
-
-                let (id, wrapper, input_config_view) = input_config::build_input_config_row(
+            ConfigPanelMsg::AddInput(input_name, input_config) => {
+                let (id, wrapper) = input_config::build_input_config_row(
                     &self.relm,
                     &self.model.project_path,
                     &input_name,
@@ -174,117 +165,107 @@ impl Update for ConfigPanel {
                 self.input_list_container.add(&wrapper);
                 wrapper.show_all();
                 self.input_config_widget_list
-                    .insert(id, (input_name, input_config, input_config_view, wrapper));
-
-                input_list_changed = true;
-            }
-            ConfigPanelMsg::AddVideoInput => {
-                let input_video_count = self
-                    .input_config_widget_list
-                    .values()
-                    .filter(|(_, input_config, _, _)| input_config.is_video())
-                    .map(|_| 1)
-                    .sum::<usize>();
-
-                let input_name = format!("Video #{:}", input_video_count + 1);
-
-                let input_config = InputConfig::Video {
-                    path: "res/example_video.mp4".to_string(),
-                    width: 640,
-                    height: 480,
-                    speed: Speed::Fps(25.0),
-                };
-
-                let (id, wrapper, input_config_view) = input_config::build_input_config_row(
-                    &self.relm,
-                    &self.model.project_path,
-                    &input_name,
-                    &input_config,
-                );
-
-                self.input_list_container.add(&wrapper);
-                wrapper.show_all();
-                self.input_config_widget_list
-                    .insert(id, (input_name, input_config, input_config_view, wrapper));
-
-                input_list_changed = true;
-            }
-            ConfigPanelMsg::AddPictureInput => {
-                let input_picture_count = self
-                    .input_config_widget_list
-                    .values()
-                    .filter(|(_, input_config, _, _)| input_config.is_picture())
-                    .map(|_| 1)
-                    .sum::<usize>();
-
-                let input_name = format!("Picture #{:}", input_picture_count + 1);
-
-                let input_config = InputConfig::Picture {
-                    path: "res/example_picture.png".to_string(),
-                    width: 640,
-                    height: 480,
-                };
-
-                let (id, wrapper, input_config_view) = input_config::build_input_config_row(
-                    &self.relm,
-                    &self.model.project_path,
-                    &input_name,
-                    &input_config,
-                );
-
-                self.input_list_container.add(&wrapper);
-                wrapper.show_all();
-                self.input_config_widget_list
-                    .insert(id, (input_name, input_config, input_config_view, wrapper));
-
-                input_list_changed = true;
-            }
-            ConfigPanelMsg::AddMidiInput => {
-                let input_midi_count = self
-                    .input_config_widget_list
-                    .values()
-                    .filter(|(_, input_config, _, _)| input_config.is_midi())
-                    .map(|_| 1)
-                    .sum::<usize>();
-
-                let input_name = format!("Midi #{:}", input_midi_count + 1);
-
-                let input_config = InputConfig::Midi {
-                    name: "*".to_string(),
-                };
-
-                let (id, wrapper, input_config_view) = input_config::build_input_config_row(
-                    &self.relm,
-                    &self.model.project_path,
-                    &input_name,
-                    &input_config,
-                );
-
-                self.input_list_container.add(&wrapper);
-                wrapper.show_all();
-                self.input_config_widget_list
-                    .insert(id, (input_name, input_config, input_config_view, wrapper));
+                    .insert(id, (input_name.clone(), input_config.clone(), wrapper));
 
                 input_list_changed = true;
             }
             ConfigPanelMsg::RemoveInput(id) => {
-                if let Some((_, _, _, input_view_wrapper)) = self.input_config_widget_list.get(&id)
-                {
+                if let Some((_, _, input_view_wrapper)) = self.input_config_widget_list.get(&id) {
                     self.input_list_container.remove(input_view_wrapper);
                 }
                 self.input_config_widget_list.remove(&id);
 
                 input_list_changed = true;
             }
-            ConfigPanelMsg::UpdateInputConfig(id, new_name, new_config) => {
-                if let Some((ref mut name, ref mut config, _, _)) =
+            ConfigPanelMsg::UpdateInput(id, input_update_message) => {
+                if let Some((ref mut input_name, ref mut config, _)) =
                     self.input_config_widget_list.get_mut(&id)
                 {
-                    *name = new_name.clone();
-                    *config = new_config.clone();
-                }
+                    if let InputConfigViewMsg::SetName(new_input_name) = &input_update_message {
+                        if self.model.config.inputs.contains_key(new_input_name) {
+                            return;
+                        }
 
-                input_list_changed = true;
+                        let config = self.model.config.inputs.remove(input_name).unwrap();
+                        self.model
+                            .config
+                            .inputs
+                            .insert(new_input_name.clone(), config);
+
+                        *input_name = new_input_name.clone();
+
+                        input_list_changed = true;
+                    } else {
+                        match config {
+                            InputConfig::Cam {
+                                path,
+                                width,
+                                height,
+                            } => match &input_update_message {
+                                InputConfigViewMsg::SetPath(new_path) => *path = new_path.clone(),
+                                InputConfigViewMsg::SetHeight(new_height) => {
+                                    *height = *new_height as usize
+                                }
+                                InputConfigViewMsg::SetWidth(new_width) => {
+                                    *width = *new_width as usize
+                                }
+                                _ => unreachable!(),
+                            },
+                            InputConfig::Video {
+                                path,
+                                width,
+                                height,
+                                speed,
+                            } => match &input_update_message {
+                                InputConfigViewMsg::SetPath(new_path) => {
+                                    if let Ok(new_path) =
+                                        PathBuf::from(new_path).related_to(&self.model.project_path)
+                                    {
+                                        *path = new_path.to_str().unwrap().to_string();
+                                    }
+                                }
+                                InputConfigViewMsg::SetHeight(new_height) => {
+                                    *height = *new_height as usize
+                                }
+                                InputConfigViewMsg::SetWidth(new_width) => {
+                                    *width = *new_width as usize
+                                }
+                                InputConfigViewMsg::SetSpeed(new_speed) => *speed = *new_speed,
+
+                                _ => unreachable!(),
+                            },
+
+                            InputConfig::Picture {
+                                path,
+                                width,
+                                height,
+                            } => match &input_update_message {
+                                InputConfigViewMsg::SetPath(new_path) => {
+                                    if let Ok(new_path) =
+                                        PathBuf::from(new_path).related_to(&self.model.project_path)
+                                    {
+                                        *path = new_path.to_str().unwrap().to_string();
+                                    }
+                                }
+                                InputConfigViewMsg::SetHeight(new_height) => {
+                                    *height = *new_height as usize
+                                }
+                                InputConfigViewMsg::SetWidth(new_width) => {
+                                    *width = *new_width as usize
+                                }
+                                _ => unreachable!(),
+                            },
+                            InputConfig::Midi { name } => match &input_update_message {
+                                InputConfigViewMsg::SetPath(new_path) => *name = new_path.clone(),
+                                _ => unreachable!(),
+                            },
+                        }
+                        self.model
+                            .config
+                            .inputs
+                            .insert(input_name.to_owned(), config.clone());
+                    }
+                }
             }
 
             ConfigPanelMsg::AddRenderStage(render_stage_config) => {
@@ -461,7 +442,7 @@ impl Update for ConfigPanel {
 
         if input_list_changed {
             self.model.config.inputs.clear();
-            for (name, config, _, _) in self.input_config_widget_list.values() {
+            for (name, config, _) in self.input_config_widget_list.values() {
                 self.model
                     .config
                     .inputs
