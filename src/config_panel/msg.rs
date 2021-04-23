@@ -5,7 +5,9 @@ use uuid::Uuid;
 use relm_derive::Msg;
 
 use wvr_com::data::{InputUpdate, Message, RenderStageUpdate, SetInfo};
-use wvr_data::config::project_config::{FilterMode, InputConfig, RenderStageConfig, SampledInput};
+use wvr_data::config::project_config::{
+    BufferPrecision, FilterMode, InputConfig, RenderStageConfig, SampledInput,
+};
 use wvr_data::DataHolder;
 
 use super::view::ConfigPanel;
@@ -36,6 +38,7 @@ pub enum ConfigPanelMsg {
     UpdateRenderStageFilterModeParams(Uuid, FilterMode),
     UpdateRenderStageVariable(Uuid, String, DataHolder),
     UpdateRenderStageInput(Uuid, String, SampledInput),
+    UpdateRenderStagePrecision(Uuid, BufferPrecision),
     UpdateRenderStageName(Uuid, String),
     MoveStage(Uuid, usize),
     RemoveRenderStage(Uuid),
@@ -154,6 +157,16 @@ impl ConfigPanelMsg {
                     Some(Message::UpdateRenderStage(
                         stage_index,
                         RenderStageUpdate::Input(input_name.clone(), input.clone()),
+                    ))
+                } else {
+                    None
+                }
+            }
+            ConfigPanelMsg::UpdateRenderStagePrecision(stage_id, precision) => {
+                if let Some(stage_index) = config_panel.get_render_stage_index(stage_id) {
+                    Some(Message::UpdateRenderStage(
+                        stage_index,
+                        RenderStageUpdate::Precision(precision.clone()),
                     ))
                 } else {
                     None

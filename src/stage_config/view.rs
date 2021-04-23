@@ -19,9 +19,11 @@ use relm_derive::Msg;
 use strsim::levenshtein;
 
 use wvr_data::config::project_config::{
-    BufferPrecision, FilterMode, RenderStageConfig, SampledInput,
+    BufferPrecision, FilterConfig, FilterMode, RenderStageConfig, SampledInput,
 };
 use wvr_data::{DataHolder, DataRange};
+
+use wvr::utils::load_available_filter_list;
 
 use crate::config_panel::msg::ConfigPanelMsg;
 use crate::config_panel::view::ConfigPanel;
@@ -30,7 +32,6 @@ use super::input;
 use super::variable;
 
 use super::list_store_sort_function;
-use super::load_available_filter_list;
 
 #[derive(Msg)]
 pub enum RenderStageConfigViewMsg {
@@ -49,6 +50,8 @@ pub struct RenderStageConfigViewModel {
     project_path: PathBuf,
     config: RenderStageConfig,
     input_choice_list: Vec<String>,
+
+    available_filter_list: HashMap<String, (PathBuf, FilterConfig, bool)>,
 }
 pub struct RenderStageConfigView {
     model: RenderStageConfigViewModel,
@@ -189,10 +192,7 @@ impl RenderStageConfigView {
 
     pub fn set_filter(&mut self, filter_name: &str) {
         self.model.config.filter = filter_name.to_string();
-        if let Some((_, filter_config)) = &load_available_filter_list(&self.model.project_path)
-            .unwrap()
-            .get(filter_name)
-        {
+        if let Some((_, filter_config, _)) = &self.model.available_filter_list.get(filter_name) {
             self.model.config.filter_mode_params = filter_config.mode.clone();
 
             self.filter_mode_params_container = match self.model.config.filter_mode_params {
@@ -343,12 +343,15 @@ impl Update for RenderStageConfigView {
             Relm<ConfigPanel>,
         ),
     ) -> Self::Model {
+        let available_filter_list = load_available_filter_list(&model.1).unwrap_or_default();
+
         RenderStageConfigViewModel {
             id: model.0,
             project_path: model.1,
             config: model.2,
             input_choice_list: model.3,
             parent_relm: model.4,
+            available_filter_list,
         }
     }
 
@@ -373,7 +376,14 @@ impl Update for RenderStageConfigView {
                     "F32" => BufferPrecision::F32,
                     _ => unreachable!(),
                 };
-                self.model.config.precision = new_precision;
+                self.model.config.precision = new_precision.clone();
+                self.model
+                    .parent_relm
+                    .stream()
+                    .emit(ConfigPanelMsg::UpdateRenderStagePrecision(
+                        self.model.id,
+                        new_precision,
+                    ));
             }
             RenderStageConfigViewMsg::UpdateInputList => self.update_input_list(),
             RenderStageConfigViewMsg::UpdateVariable(name, value) => {

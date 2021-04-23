@@ -376,6 +376,15 @@ impl Update for ConfigPanel {
                     }
                 }
             }
+            ConfigPanelMsg::UpdateRenderStagePrecision(id, new_precision) => {
+                if let Some(render_stage_index) = self.get_render_stage_index(id) {
+                    if let Some(ref mut config) =
+                        self.model.config.render_chain.get_mut(render_stage_index)
+                    {
+                        config.precision = new_precision.clone();
+                    }
+                }
+            }
             ConfigPanelMsg::UpdateRenderStageName(id, new_name) => {
                 if let Some((_, render_stage_config_view_wrapper)) =
                     self.render_stage_config_widget_list.get(&id)
