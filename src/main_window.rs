@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
-
 use relm::connect;
 use relm_derive::Msg;
 
@@ -10,10 +8,9 @@ use gtk::prelude::*;
 
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    AccelFlags, AccelGroup, AspectFrame, Button, ButtonExt, ButtonsType, ContainerExt,
-    DialogBuilder, DialogExt, Entry, EntryExt, FrameExt, GLArea, GLAreaExt, GtkWindowExt, Inhibit,
-    Menu, MenuBar, MenuItem, MessageDialogBuilder, MessageType, Paned, PanedExt, ResponseType,
-    Settings, ShadowType, WidgetExt, Window, WindowPosition, WindowType,
+    AccelFlags, AccelGroup, ButtonsType, ContainerExt, DialogBuilder, DialogExt, Entry, EntryExt,
+    GtkWindowExt, Inhibit, Menu, MenuBar, MenuItem, MessageDialogBuilder, MessageType,
+    ResponseType, Settings, WidgetExt, Window, WindowPosition, WindowType,
 };
 
 use relm::{Component, ContainerWidget, Relm, Update, Widget};
@@ -30,27 +27,21 @@ pub enum Msg {
     NewProject,
     OpenProject(PathBuf, ProjectConfig),
     SaveProject,
-    StartProject,
+    ToggleDarkMode,
     Quit,
 }
 pub struct Model {
     project_path: Option<PathBuf>,
     project_config: Option<ProjectConfig>,
+    dark_mode: bool,
 }
 
 pub struct MainWindow {
     model: Model,
     window: Window,
 
-    control_container: gtk::Box,
-
-    project_container: Paned,
-
     config_panel_container: gtk::Box,
     config_panel: Option<Component<ConfigPanel>>,
-
-    glarea: GLArea,
-    glarea_wrapper: AspectFrame,
 
     relm: Relm<Self>,
 }
@@ -131,25 +122,6 @@ impl MainWindow {
 
         created_project
     }
-
-    fn start_wvr(&mut self) -> Result<()> {
-        if let (Some(project_path), Some(project_config)) =
-            (&self.model.project_path, &self.model.project_config)
-        {
-            let order_sender =
-                crate::wvr_frame::build_wvr_frame(&self.glarea, project_path, project_config)?;
-
-            if let Some(config_panel) = &self.config_panel {
-                config_panel
-                    .stream()
-                    .emit(ConfigPanelMsg::SetControlChannel(order_sender));
-            }
-
-            self.project_container.show_all();
-        }
-
-        Ok(())
-    }
 }
 
 impl Update for MainWindow {
@@ -161,11 +133,20 @@ impl Update for MainWindow {
         Model {
             project_path: None,
             project_config: None,
+            dark_mode: true,
         }
     }
 
     fn update(&mut self, event: Msg) {
         match event {
+            Msg::ToggleDarkMode => {
+                self.model.dark_mode = !self.model.dark_mode;
+
+                let settings = Settings::get_default().unwrap();
+                settings
+                    .set_property("gtk-application-prefer-dark-theme", &self.model.dark_mode)
+                    .unwrap();
+            }
             Msg::UpdateConfig(project_config) => {
                 self.model.project_config = Some(project_config);
             }
@@ -175,10 +156,6 @@ impl Update for MainWindow {
 
                 for children in &self.config_panel_container.get_children() {
                     self.config_panel_container.remove(children);
-                }
-
-                for children in &self.glarea_wrapper.get_children() {
-                    self.glarea_wrapper.remove(children);
                 }
 
                 self.window.set_title(&format!(
@@ -192,21 +169,6 @@ impl Update for MainWindow {
                         .to_str()
                         .unwrap()
                 ));
-
-                let glarea = GLArea::new();
-
-                glarea.set_required_version(3, 2);
-                glarea.set_hexpand(true);
-                glarea.set_vexpand(true);
-
-                glarea.set_size_request(
-                    (project_config.view.width / 4) as i32,
-                    (project_config.view.height / 4) as i32,
-                );
-
-                self.glarea_wrapper.add(&glarea);
-
-                self.glarea = glarea;
 
                 self.config_panel = Some(self.config_panel_container.add_widget::<ConfigPanel>((
                     self.relm.clone(),
@@ -230,9 +192,6 @@ impl Update for MainWindow {
                         .emit(Msg::OpenProject(new_project_path, new_project_config));
                 }
             }
-            Msg::StartProject => {
-                self.start_wvr().unwrap();
-            }
             Msg::Quit => gtk::main_quit(),
         }
     }
@@ -241,7 +200,7 @@ impl Update for MainWindow {
 fn build_menu_bar(relm: &Relm<MainWindow>, accel_group: &AccelGroup) -> MenuBar {
     let menu_bar = MenuBar::new();
 
-    let file = MenuItem::with_label("File");
+    let file_button = MenuItem::with_label("File");
     let file_menu = Menu::new();
 
     let new_menu_item = MenuItem::with_label("New");
@@ -260,13 +219,24 @@ fn build_menu_bar(relm: &Relm<MainWindow>, accel_group: &AccelGroup) -> MenuBar 
     let (key, modifier) = gtk::accelerator_parse("<Primary>Q");
     quit.add_accelerator("activate", accel_group, key, modifier, AccelFlags::VISIBLE);
 
+    file_button.set_submenu(Some(&file_menu));
     file_menu.append(&new_menu_item);
     file_menu.append(&open_menu_item);
     file_menu.append(&save_menu_item);
     file_menu.append(&quit);
 
-    file.set_submenu(Some(&file_menu));
-    menu_bar.append(&file);
+    let view_button = MenuItem::with_label("View");
+    let view_menu = Menu::new();
+
+    let dark_mode_button = MenuItem::with_label("Toggle dark theme");
+    let (key, modifier) = gtk::accelerator_parse("<Primary>D");
+    dark_mode_button.add_accelerator("activate", accel_group, key, modifier, AccelFlags::VISIBLE);
+
+    view_button.set_submenu(Some(&view_menu));
+    view_menu.append(&dark_mode_button);
+
+    menu_bar.append(&file_button);
+    menu_bar.append(&view_button);
 
     connect!(relm, new_menu_item, connect_activate(_), Msg::NewProject);
 
@@ -283,6 +253,13 @@ fn build_menu_bar(relm: &Relm<MainWindow>, accel_group: &AccelGroup) -> MenuBar 
 
     connect!(relm, save_menu_item, connect_activate(_), Msg::SaveProject);
 
+    connect!(
+        relm,
+        dark_mode_button,
+        connect_activate(_),
+        Msg::ToggleDarkMode
+    );
+
     connect!(relm, quit, connect_activate(_), Msg::Quit);
 
     menu_bar
@@ -298,7 +275,7 @@ impl Widget for MainWindow {
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
         let settings = Settings::get_default().unwrap();
         settings
-            .set_property("gtk-application-prefer-dark-theme", &true)
+            .set_property("gtk-application-prefer-dark-theme", &model.dark_mode)
             .unwrap();
 
         let window = Window::new(WindowType::Toplevel);
@@ -307,6 +284,20 @@ impl Widget for MainWindow {
         window.set_position(gtk::WindowPosition::Center);
         window.maximize();
 
+        if let Err(e) = wvr::utils::init_wvr_data_directory() {
+            let error_message = MessageDialogBuilder::new()
+                .title("Error initializing wvr files")
+                .text(&format!("{:?}", e))
+                .message_type(MessageType::Error)
+                .window_position(WindowPosition::Center)
+                .buttons(ButtonsType::Ok)
+                .attached_to(&window)
+                .modal(true)
+                .build();
+            error_message.run();
+            error_message.close();
+        }
+
         let accel_group = AccelGroup::new();
         window.add_accel_group(&accel_group);
 
@@ -314,51 +305,11 @@ impl Widget for MainWindow {
 
         v_box.pack_start(&build_menu_bar(relm, &accel_group), false, false, 0);
 
-        let project_container = Paned::new(Horizontal);
-
         let config_panel_container = gtk::Box::new(Vertical, 0);
 
         config_panel_container.add(&welcome_panel::build_welcome_panel(relm));
 
-        project_container.pack1(&config_panel_container, true, false);
-
-        let glarea_wrapper = AspectFrame::new(None, 0.5, 0.0, 16.0 / 9.0, true);
-        glarea_wrapper.set_property_margin(8);
-        glarea_wrapper.set_shadow_type(ShadowType::None);
-        glarea_wrapper.set_hexpand(true);
-        glarea_wrapper.set_vexpand(true);
-
-        let glarea = GLArea::new();
-
-        glarea.set_size_request(380, 270);
-
-        glarea.set_required_version(3, 2);
-        glarea.set_hexpand(true);
-        glarea.set_vexpand(true);
-
-        glarea_wrapper.add(&glarea);
-        project_container.pack2(&glarea_wrapper, true, true);
-
-        project_container.show_all();
-
-        v_box.add(&project_container);
-
-        let control_container = gtk::Box::new(Vertical, 8);
-        control_container.set_property_margin(8);
-
-        let start_button = Button::new();
-        start_button.set_label("Start");
-        start_button.set_hexpand(true);
-        connect!(
-            relm,
-            start_button,
-            connect_clicked(_),
-            Some(Msg::StartProject)
-        );
-
-        control_container.add(&start_button);
-
-        v_box.add(&control_container);
+        v_box.pack_start(&config_panel_container, true, true, 0);
 
         connect!(
             relm,
@@ -371,16 +322,9 @@ impl Widget for MainWindow {
 
         window.show_all();
 
-        control_container.hide();
-
         MainWindow {
             model,
             window,
-            control_container,
-
-            project_container,
-            glarea,
-            glarea_wrapper,
 
             config_panel_container,
             config_panel: None,

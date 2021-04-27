@@ -185,10 +185,10 @@ pub fn build_video_view(
 
         let speed_type_button_fps = RadioButton::with_label("Fps");
         let speed_type_button_beats =
-            RadioButton::with_label_from_widget(&speed_type_button_fps, "Beats");
+            RadioButton::with_label_from_widget(&speed_type_button_fps, "Fpb");
 
         let (speed_is_bpm, speed_value) = match speed {
-            Speed::Beats(speed) => (true, speed),
+            Speed::Fpb(speed) => (true, speed),
             Speed::Fps(speed) => (false, speed),
         };
 
@@ -221,7 +221,7 @@ pub fn build_video_view(
                     if speed_type_button_beats.get_active() {
                         Some(ConfigPanelMsg::UpdateInput(
                             id,
-                            InputConfigViewMsg::SetSpeed(Speed::Beats(value)),
+                            InputConfigViewMsg::SetSpeed(Speed::Fpb(value)),
                         ))
                     } else {
                         Some(ConfigPanelMsg::UpdateInput(
@@ -250,7 +250,7 @@ pub fn build_video_view(
                     {
                         Some(ConfigPanelMsg::UpdateInput(
                             id,
-                            InputConfigViewMsg::SetSpeed(Speed::Beats(value)),
+                            InputConfigViewMsg::SetSpeed(Speed::Fpb(value)),
                         ))
                     } else {
                         None

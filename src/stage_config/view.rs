@@ -3,14 +3,17 @@ use std::path::PathBuf;
 
 use uuid::Uuid;
 
-use glib::Cast;
+use glib::{Cast, ToValue};
 
-use gtk::prelude::{GtkListStoreExtManual, TreeSortableExtManual};
-use gtk::Orientation::{self, Horizontal, Vertical};
+//use gtk::prelude::*, };
 use gtk::{
-    Adjustment, ComboBoxExt, ComboBoxText, ComboBoxTextExt, ContainerExt, EditableSignals, Entry,
-    EntryExt, Grid, GridExt, GtkListStoreExt, Label, LabelExt, OrientableExt, PolicyType,
-    ScrolledWindow, ScrolledWindowExt, Separator, SortColumn, SortType, WidgetExt,
+    prelude::{GtkListStoreExtManual, TreeSortableExtManual, TreeStoreExtManual},
+    Adjustment, CellLayoutExt, CellRendererText, ComboBoxExt, ComboBoxText, ComboBoxTextExt,
+    ContainerExt, EditableSignals, Entry, EntryExt, Grid, GridExt, GtkListStoreExt, Label,
+    LabelExt, MenuButton, MenuButtonExt, OrientableExt,
+    Orientation::{self, Horizontal, Vertical},
+    PolicyType, Popover, ScrolledWindow, ScrolledWindowExt, Separator, SortColumn, SortType,
+    TreeModelExt, TreeSelectionExt, TreeStoreExt, TreeViewColumn, TreeViewExt, WidgetExt,
 };
 
 use relm::{connect, Relm, Update, Widget};
@@ -22,8 +25,6 @@ use wvr_data::config::project_config::{
     BufferPrecision, FilterConfig, FilterMode, RenderStageConfig, SampledInput,
 };
 use wvr_data::{DataHolder, DataRange};
-
-use wvr::utils::load_available_filter_list;
 
 use crate::config_panel::msg::ConfigPanelMsg;
 use crate::config_panel::view::ConfigPanel;
@@ -39,7 +40,7 @@ pub enum RenderStageConfigViewMsg {
     SetFilter(String),
     SetPrecision(String),
 
-    UpdateInputList,
+    UpdateInput(String, SampledInput),
     UpdateVariable(String, DataHolder),
     UpdateInputChoiceList(Vec<String>),
 }
@@ -47,7 +48,6 @@ pub enum RenderStageConfigViewMsg {
 pub struct RenderStageConfigViewModel {
     parent_relm: Relm<ConfigPanel>,
     id: Uuid,
-    project_path: PathBuf,
     config: RenderStageConfig,
     input_choice_list: Vec<String>,
 
@@ -66,47 +66,6 @@ pub struct RenderStageConfigView {
 }
 
 impl RenderStageConfigView {
-    pub fn update_input_list(&mut self) {
-        self.model.config.inputs.clear();
-        for (input_name, (input_type_entry, input_name_chooser)) in self.input_widget_list.iter() {
-            let input_value = match input_type_entry.get_active_id().unwrap().as_str() {
-                "Linear" => SampledInput::Linear(
-                    input_name_chooser
-                        .get_active_id()
-                        .unwrap_or_else(|| glib::GString::from(""))
-                        .to_string(),
-                ),
-                "Nearest" => SampledInput::Nearest(
-                    input_name_chooser
-                        .get_active_id()
-                        .unwrap_or_else(|| glib::GString::from(""))
-                        .to_string(),
-                ),
-                "Mipmaps" => SampledInput::Mipmaps(
-                    input_name_chooser
-                        .get_active_id()
-                        .unwrap_or_else(|| glib::GString::from(""))
-                        .to_string(),
-                ),
-                _ => unreachable!(),
-            };
-
-            self.model
-                .parent_relm
-                .stream()
-                .emit(ConfigPanelMsg::UpdateRenderStageInput(
-                    self.model.id,
-                    input_name.clone(),
-                    input_value.clone(),
-                ));
-
-            self.model
-                .config
-                .inputs
-                .insert(input_name.clone(), input_value);
-        }
-    }
-
     pub fn update_filter_params(&mut self, value: DataHolder) {
         match &mut self.model.config.filter_mode_params {
             FilterMode::Rectangle(x_a, y_a, x_b, y_b) => {
@@ -141,7 +100,7 @@ impl RenderStageConfigView {
 
         self.model.input_choice_list = input_choice_list;
 
-        for (_, (_, input_name_chooser)) in self.input_widget_list.iter() {
+        for (uniform_name, (_, input_name_chooser)) in self.input_widget_list.iter() {
             let new_id;
 
             if let Some(current_id) = input_name_chooser.get_active_id() {
@@ -183,11 +142,23 @@ impl RenderStageConfigView {
 
             if let Some(new_id) = new_id {
                 input_name_chooser.set_active_id(Some(&new_id));
+
+                if let Some(input_value) = self.model.config.inputs.get(uniform_name) {
+                    self.relm
+                        .stream()
+                        .emit(RenderStageConfigViewMsg::UpdateInput(
+                            uniform_name.clone(),
+                            match input_value {
+                                SampledInput::Linear(_) => SampledInput::Linear(new_id),
+                                SampledInput::Mipmaps(_) => SampledInput::Linear(new_id),
+                                SampledInput::Nearest(_) => SampledInput::Linear(new_id),
+                            },
+                        ));
+                }
             } else {
                 input_name_chooser.set_active_id(None);
             }
         }
-        self.update_input_list();
     }
 
     pub fn set_filter(&mut self, filter_name: &str) {
@@ -237,7 +208,12 @@ impl RenderStageConfigView {
                 input_name_label.set_xalign(0.0);
 
                 let (input_wrapper, input_type_chooser, input_name_chooser) =
-                    input::build_input_row(&self.relm, &self.model.input_choice_list, &input_value);
+                    input::build_input_row(
+                        &self.relm,
+                        &self.model.input_choice_list,
+                        &uniform_name,
+                        &input_value,
+                    );
 
                 self.model
                     .config
@@ -326,9 +302,9 @@ impl Update for RenderStageConfigView {
     type Model = RenderStageConfigViewModel;
     type ModelParam = (
         Uuid,
-        PathBuf,
         RenderStageConfig,
         Vec<String>,
+        HashMap<String, (PathBuf, FilterConfig, bool)>,
         Relm<ConfigPanel>,
     );
     type Msg = RenderStageConfigViewMsg;
@@ -337,21 +313,18 @@ impl Update for RenderStageConfigView {
         _: &Relm<Self>,
         model: (
             Uuid,
-            PathBuf,
             RenderStageConfig,
             Vec<String>,
+            HashMap<String, (PathBuf, FilterConfig, bool)>,
             Relm<ConfigPanel>,
         ),
     ) -> Self::Model {
-        let available_filter_list = load_available_filter_list(&model.1).unwrap_or_default();
-
         RenderStageConfigViewModel {
             id: model.0,
-            project_path: model.1,
-            config: model.2,
-            input_choice_list: model.3,
+            config: model.1,
+            input_choice_list: model.2,
+            available_filter_list: model.3,
             parent_relm: model.4,
-            available_filter_list,
         }
     }
 
@@ -385,7 +358,18 @@ impl Update for RenderStageConfigView {
                         new_precision,
                     ));
             }
-            RenderStageConfigViewMsg::UpdateInputList => self.update_input_list(),
+            RenderStageConfigViewMsg::UpdateInput(input_name, input_value) => {
+                self.model
+                    .parent_relm
+                    .stream()
+                    .emit(ConfigPanelMsg::UpdateRenderStageInput(
+                        self.model.id,
+                        input_name.clone(),
+                        input_value.clone(),
+                    ));
+
+                self.model.config.inputs.insert(input_name, input_value);
+            }
             RenderStageConfigViewMsg::UpdateVariable(name, value) => {
                 if name == "_FILTER_MODE_PARAMS" {
                     self.update_filter_params(value);
@@ -410,25 +394,16 @@ impl Widget for RenderStageConfigView {
     }
 
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
-        let mut input_widget_list = HashMap::new();
-
         let root = gtk::Box::new(Vertical, 4);
         root.set_property_margin(8);
 
-        let base_config = gtk::Grid::new();
-        base_config.set_hexpand(true);
-        base_config.set_row_spacing(4);
-        base_config.set_column_spacing(8);
-        base_config.set_orientation(Orientation::Vertical);
+        let base_config = gtk::Box::new(Horizontal, 8);
 
-        // Building of the input name row
-
-        //let name_label = Label::new(Some("Name: "));
-        //name_label.set_xalign(0.0);
-
+        // Building of the input name widget
         let name_entry = Entry::new();
         name_entry.set_hexpand(true);
         name_entry.set_text(&model.config.name);
+        name_entry.set_tooltip_text(Some("Layer name"));
         connect!(
             relm,
             name_entry,
@@ -438,34 +413,12 @@ impl Widget for RenderStageConfigView {
             ))
         );
 
-        // Building of the filter selection row
-        let available_filters = load_available_filter_list(&model.project_path).unwrap();
-        let filter_store = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
-        for name in available_filters.keys() {
-            filter_store.insert_with_values(None, &[0, 1], &[name, name]);
-        }
-        filter_store.set_sort_column_id(SortColumn::Index(0), SortType::Ascending);
+        // Building of the filter selection widget
+        let filter_chooser_button =
+            build_filter_chooser(relm, &model.available_filter_list, &model.config.filter);
+        filter_chooser_button.set_tooltip_text(Some("Used filter"));
 
-        let filter_chooser = gtk::ComboBoxText::new();
-        filter_chooser.set_hexpand(true);
-        filter_chooser.set_model(Some(&filter_store));
-
-        filter_chooser.set_id_column(0);
-        filter_chooser.set_entry_text_column(1);
-
-        {
-            let filter_chooser = filter_chooser.clone();
-            connect!(
-                relm,
-                filter_chooser,
-                connect_changed(val),
-                Some(RenderStageConfigViewMsg::SetFilter(
-                    val.get_active_text().unwrap().to_string()
-                ))
-            );
-        }
-
-        // Building of the filter_mode_params selection row
+        // Building of the filter_mode_params selection widget
         let filter_mode_params_label = Label::new(None);
         filter_mode_params_label.set_xalign(0.0);
 
@@ -485,10 +438,7 @@ impl Widget for RenderStageConfigView {
             }
         };
 
-        // Building of the precision selection row
-        //let precision_label = Label::new(Some("Precision: "));
-        //precision_label.set_xalign(0.0);
-
+        // Building of the precision selection widget
         let available_precisions = ["U8", "F16", "F32"];
         let precision_store = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
         for name in available_precisions.iter() {
@@ -500,6 +450,7 @@ impl Widget for RenderStageConfigView {
         let precision_chooser = gtk::ComboBoxText::new();
         precision_chooser.set_hexpand(false);
         precision_chooser.set_model(Some(&precision_store));
+        precision_chooser.set_tooltip_text(Some("Generated buffer precision"));
 
         precision_chooser.set_id_column(0);
         precision_chooser.set_entry_text_column(1);
@@ -523,107 +474,20 @@ impl Widget for RenderStageConfigView {
         }
 
         //base_config.attach(&name_label, 0, 0, 1, 1);
-        base_config.attach(&name_entry, 0, 0, 2, 1);
+        base_config.add(&name_entry);
 
-        //base_config.attach(&filter_label, 0, 2, 1, 1);
-        base_config.attach(&filter_chooser, 0, 1, 1, 1);
-        //base_config.attach(&precision_label, 0, 1, 1, 1);
-        base_config.attach(&precision_chooser, 1, 1, 1, 1);
+        base_config.add(&filter_chooser_button);
+        base_config.add(&precision_chooser);
 
-        base_config.attach(&filter_mode_params_label, 0, 2, 1, 1);
-        base_config.attach(&filter_mode_params_container, 1, 2, 1, 1);
+        base_config.add(&filter_mode_params_label);
+        base_config.add(&filter_mode_params_container);
 
-        let filter_config_panel = gtk::Box::new(Vertical, 16);
-
-        let filter_config_container = gtk::Grid::new();
-        filter_config_container.set_row_spacing(4);
-        filter_config_container.set_column_spacing(8);
-        filter_config_container.set_orientation(Orientation::Vertical);
-
-        if available_filters.contains_key(&model.config.filter) {
-            let filter_config = available_filters
-                .get(&model.config.filter)
-                .unwrap()
-                .1
-                .clone();
-
-            filter_chooser.set_active_id(Some(&model.config.filter));
-
-            let mut input_name_list = filter_config.inputs.clone();
-            input_name_list.sort();
-            for (input_index, input_name) in input_name_list.iter().enumerate() {
-                let input_value = if let Some(input_value) = model.config.inputs.get(input_name) {
-                    input_value.clone()
-                } else {
-                    SampledInput::Linear("".to_string())
-                };
-
-                let input_name_label = Label::new(Some(input_name));
-                input_name_label.set_xalign(0.0);
-
-                let (input_wrapper, input_type_entry, input_value_entry) =
-                    input::build_input_row(relm, &model.input_choice_list, &input_value);
-
-                filter_config_container.add(&input_wrapper);
-
-                filter_config_container.attach(&input_name_label, 0, input_index as i32, 1, 1);
-                filter_config_container.attach(&input_wrapper, 1, input_index as i32, 1, 1);
-
-                input_widget_list.insert(input_name.clone(), (input_type_entry, input_value_entry));
-            }
-
-            let mut variable_name_list: Vec<String> =
-                filter_config.variables.keys().map(String::clone).collect();
-            variable_name_list.sort();
-
-            for (variable_index, variable_name) in variable_name_list.iter().enumerate() {
-                let (default_value, value_range) =
-                    filter_config.variables.get(variable_name).unwrap();
-                let variable_value =
-                    if let Some(stage_variable_value) = model.config.variables.get(variable_name) {
-                        stage_variable_value
-                    } else {
-                        default_value
-                    };
-                let variable_wrapper = variable::build_variable_row(
-                    relm,
-                    &variable_name,
-                    &variable_value,
-                    &value_range,
-                );
-
-                let variable_name_label = Label::new(Some(variable_name));
-                variable_name_label.set_xalign(0.0);
-
-                filter_config_container.attach(
-                    &variable_name_label,
-                    0,
-                    (input_name_list.len() + variable_index) as i32,
-                    1,
-                    1,
-                );
-                filter_config_container.attach(
-                    &variable_wrapper,
-                    1,
-                    (input_name_list.len() + variable_index) as i32,
-                    1,
-                    1,
-                );
-            }
-        }
-
-        filter_config_panel.add(&filter_config_container);
-
-        let filter_config_wrapper = ScrolledWindow::new::<Adjustment, Adjustment>(None, None);
-
-        filter_config_wrapper.set_policy(PolicyType::Never, PolicyType::Automatic);
-        filter_config_wrapper.set_hexpand(true);
-        filter_config_wrapper.set_vexpand(true);
-        filter_config_wrapper.add(&filter_config_panel);
+        let (filter_config_container, filter_config_panel, input_widget_list) =
+            build_filter_config(relm, &model);
 
         root.add(&base_config);
         root.add(&Separator::new(Horizontal));
-        root.add(&filter_config_wrapper);
+        root.add(&filter_config_panel);
 
         Self {
             relm: relm.clone(),
@@ -637,4 +501,204 @@ impl Widget for RenderStageConfigView {
             input_widget_list,
         }
     }
+}
+
+pub fn build_filter_config(
+    relm: &Relm<RenderStageConfigView>,
+    model: &RenderStageConfigViewModel,
+) -> (
+    Grid,
+    ScrolledWindow,
+    HashMap<String, (ComboBoxText, ComboBoxText)>,
+) {
+    let mut input_widget_list = HashMap::new();
+
+    let filter_config_panel = gtk::Box::new(Vertical, 16);
+    let filter_config_container = gtk::Grid::new();
+    filter_config_container.set_row_spacing(4);
+    filter_config_container.set_column_spacing(8);
+    filter_config_container.set_orientation(Orientation::Vertical);
+
+    if model
+        .available_filter_list
+        .contains_key(&model.config.filter)
+    {
+        let filter_config = model
+            .available_filter_list
+            .get(&model.config.filter)
+            .unwrap()
+            .1
+            .clone();
+
+        let mut input_name_list = filter_config.inputs.clone();
+        input_name_list.sort();
+        for (input_index, input_name) in input_name_list.iter().enumerate() {
+            let input_value = if let Some(input_value) = model.config.inputs.get(input_name) {
+                input_value.clone()
+            } else {
+                SampledInput::Linear("".to_string())
+            };
+
+            let input_name_label = Label::new(Some(input_name));
+            input_name_label.set_xalign(0.0);
+
+            let (input_wrapper, input_type_entry, input_value_entry) =
+                input::build_input_row(relm, &model.input_choice_list, &input_name, &input_value);
+
+            //filter_config_container.add(&input_wrapper);
+
+            filter_config_container.attach(&input_name_label, 0, input_index as i32, 1, 1);
+            filter_config_container.attach(&input_wrapper, 1, input_index as i32, 2, 1);
+
+            input_widget_list.insert(input_name.clone(), (input_type_entry, input_value_entry));
+        }
+
+        let mut variable_name_list: Vec<String> =
+            filter_config.variables.keys().map(String::clone).collect();
+        variable_name_list.sort();
+
+        for (variable_index, variable_name) in variable_name_list.iter().enumerate() {
+            let (default_value, value_range) = filter_config.variables.get(variable_name).unwrap();
+            let variable_value =
+                if let Some(stage_variable_value) = model.config.variables.get(variable_name) {
+                    stage_variable_value
+                } else {
+                    default_value
+                };
+            let variable_wrapper =
+                variable::build_variable_row(relm, &variable_name, &variable_value, &value_range);
+
+            let variable_name_label = Label::new(Some(variable_name));
+            variable_name_label.set_xalign(0.0);
+
+            filter_config_container.attach(
+                &variable_name_label,
+                0,
+                (input_name_list.len() + variable_index) as i32,
+                1,
+                1,
+            );
+            filter_config_container.attach(
+                &variable_wrapper,
+                1,
+                (input_name_list.len() + variable_index) as i32,
+                1,
+                1,
+            );
+        }
+    }
+
+    filter_config_panel.add(&filter_config_container);
+
+    let filter_config_wrapper = ScrolledWindow::new::<Adjustment, Adjustment>(None, None);
+
+    filter_config_wrapper.set_policy(PolicyType::Never, PolicyType::Automatic);
+    filter_config_wrapper.set_hexpand(true);
+    filter_config_wrapper.set_vexpand(true);
+    filter_config_wrapper.add(&filter_config_panel);
+
+    (
+        filter_config_container,
+        filter_config_wrapper,
+        input_widget_list,
+    )
+}
+
+pub fn build_filter_chooser(
+    relm: &Relm<RenderStageConfigView>,
+    available_filter_list: &HashMap<String, (PathBuf, FilterConfig, bool)>,
+    selected_filter: &str,
+) -> MenuButton {
+    let filter_chooser_label = Label::new(Some(selected_filter));
+    let filter_chooser_button = MenuButton::new();
+    filter_chooser_button.add(&filter_chooser_label);
+
+    let filter_chooser_popover = Popover::new(Some(&filter_chooser_button));
+    filter_chooser_button.set_popover(Some(&filter_chooser_popover));
+
+    let filter_store = gtk::TreeStore::new(&[glib::Type::String, glib::Type::String]);
+
+    let mut parents_iter = HashMap::new();
+
+    //let root = filter_store.append(None);
+    for name in available_filter_list.keys() {
+        let mut parent_chain = String::new();
+
+        let filter_name = name.split('/').last().unwrap();
+        for sub_name in name.split('/') {
+            let sub_name = sub_name.to_owned();
+
+            if sub_name == filter_name {
+                if let Some(direct_parent) = parents_iter.get(&parent_chain) {
+                    filter_store.insert_with_values(
+                        Some(direct_parent),
+                        None,
+                        &[0, 1],
+                        &[&sub_name, name],
+                    );
+                } else {
+                    filter_store.insert_with_values(None, None, &[0, 1], &[&sub_name, name]);
+                }
+            } else {
+                let old_parent_chain = parent_chain.clone();
+
+                if !parent_chain.is_empty() {
+                    parent_chain.push('/');
+                }
+                parent_chain.push_str(&sub_name);
+
+                if parents_iter.get(&parent_chain).is_none() {
+                    let sub_name_iter =
+                        if let Some(direct_parent) = parents_iter.get(&old_parent_chain) {
+                            filter_store.append(Some(direct_parent))
+                        } else {
+                            filter_store.append(None)
+                        };
+
+                    filter_store.set_value(&sub_name_iter, 0, &sub_name.to_value());
+
+                    parents_iter.insert(sub_name.clone(), sub_name_iter);
+                }
+            }
+        }
+    }
+    filter_store.set_sort_column_id(SortColumn::Index(0), SortType::Ascending);
+
+    let filter_chooser = gtk::TreeView::new();
+
+    filter_chooser.set_hexpand(true);
+    filter_chooser.set_model(Some(&filter_store));
+
+    let column = TreeViewColumn::new();
+    let cell = CellRendererText::new();
+
+    column.pack_start(&cell, true);
+    column.add_attribute(&cell, "text", 0);
+    filter_chooser.append_column(&column);
+
+    filter_chooser.show_all();
+    for children in &filter_chooser_popover.get_children() {
+        filter_chooser_popover.remove(children);
+    }
+    filter_chooser_popover.add(&filter_chooser);
+
+    connect!(relm, filter_chooser, connect_cursor_changed(val), {
+        if let Some((list_model, iter)) = val.get_selection().get_selected() {
+            if let Some(filter_name) = list_model
+                .get_value(&iter, 1)
+                .get::<String>()
+                .ok()
+                .and_then(|value| value)
+            {
+                filter_chooser_label.set_text(filter_name.as_str());
+                Some(RenderStageConfigViewMsg::SetFilter(filter_name))
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    });
+
+    filter_chooser_button
 }

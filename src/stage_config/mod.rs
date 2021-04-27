@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use uuid::Uuid;
 
@@ -13,7 +14,10 @@ use gtk::{
 
 use relm::{connect, Cast, Component, ContainerWidget, Relm};
 
-use wvr_data::config::project_config::{BufferPrecision, FilterMode, RenderStageConfig};
+use wvr::utils::load_available_filter_list;
+use wvr_data::config::project_config::{
+    BufferPrecision, FilterConfig, FilterMode, RenderStageConfig,
+};
 
 pub mod input;
 pub mod variable;
@@ -45,8 +49,11 @@ pub fn build_list_view(
     let add_render_stage_button = Button::new();
     add_render_stage_button.set_label("+");
     add_render_stage_button.set_property_margin(4);
+
+    let layer_count = Mutex::new(0);
     connect!(relm, add_render_stage_button, connect_clicked(_), {
-        let render_stage_name = "New layer".to_string();
+        let mut layer_count = layer_count.lock().unwrap();
+        let render_stage_name = format!("Layer #{:}", *layer_count);
         let filter_name = "copy_input";
         let render_stage_config = RenderStageConfig {
             name: render_stage_name,
@@ -56,6 +63,9 @@ pub fn build_list_view(
             variables: HashMap::new(),
             precision: BufferPrecision::U8,
         };
+
+        *layer_count += 1;
+
         Some(ConfigPanelMsg::AddRenderStage(render_stage_config))
     });
 
@@ -63,12 +73,16 @@ pub fn build_list_view(
 
     render_stage_list_container.set_action_widget(&add_render_stage_button, PackType::End);
 
+    let mut available_filter_list =
+        load_available_filter_list(&wvr_data::get_filters_path(), true).unwrap();
+    available_filter_list.extend(load_available_filter_list(&project_path.join("filters"), false).unwrap());
+
     for render_stage_config in render_stage_config_list {
         let (id, wrapper, render_stage_config_view) = build_render_stage_config_row(
             relm,
-            project_path,
             &render_stage_config,
             &input_choice_list,
+            &available_filter_list,
         );
         let page_label_container = gtk::Box::new(Horizontal, 4);
         page_label_container.set_property_margin(0);
@@ -122,18 +136,18 @@ pub fn build_list_view(
 
 pub fn build_render_stage_config_row(
     relm: &Relm<ConfigPanel>,
-    project_path: &Path,
     render_stage_config: &RenderStageConfig,
     input_choice_list: &[String],
+    available_filter_list: &HashMap<String, (PathBuf, FilterConfig, bool)>,
 ) -> (Uuid, gtk::Box, Component<RenderStageConfigView>) {
     let id = Uuid::new_v4();
     let wrapper = gtk::Box::new(Horizontal, 2);
 
     let render_stage_config_view = wrapper.add_widget::<RenderStageConfigView>((
         id,
-        project_path.to_owned(),
         render_stage_config.clone(),
         input_choice_list.to_vec(),
+        available_filter_list.clone(),
         relm.clone(),
     ));
 

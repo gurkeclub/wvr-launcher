@@ -1,6 +1,6 @@
 [package]
 name = "wvr-launcher"
-version = "0.1.15"
+version = "0.1.16"
 authors = ["gurke.club <contact@gurke.club>"]
 edition = "2018"
 
@@ -8,7 +8,7 @@ edition = "2018"
 anyhow = "1.0"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 glib = "0.10"
-gtk = {version = "0.9", features = ["v3_16"]}
+gtk = {version = "0.9", features = ["v3_20"]}
 gdk = "0.13"
 gio = "0.9"
 relm = "0.21"

@@ -5,14 +5,17 @@ use std::sync::mpsc::Sender;
 
 use uuid::Uuid;
 
+use anyhow::Result;
+
 use glib::object::ObjectExt;
 use glib::Cast;
 
 use gtk::prelude::{GtkListStoreExtManual, NotebookExtManual, TreeSortableExtManual};
 use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    Button, ButtonExt, ComboBoxExt, ComboBoxText, ContainerExt, GtkListStoreExt, Label, LabelExt,
-    Notebook, NotebookExt, ReliefStyle, Settings, SortColumn, SortType, WidgetExt,
+    AspectFrame, Button, ButtonExt, ComboBoxExt, ComboBoxText, ContainerExt, FrameExt, GLArea,
+    GLAreaExt, GtkListStoreExt, Label, LabelExt, Notebook, NotebookExt, Paned, PanedExt,
+    ReliefStyle, Settings, ShadowType, SortColumn, SortType, WidgetExt,
 };
 
 use relm::{connect, Component, Relm, Update, Widget};
@@ -20,6 +23,7 @@ use relm::{connect, Component, Relm, Update, Widget};
 use path_calculate::Calculate;
 use strsim::levenshtein;
 
+use wvr::utils::load_available_filter_list;
 use wvr_com::data::{Message, RenderStageUpdate};
 use wvr_data::config::project_config::ProjectConfig;
 use wvr_data::config::project_config::{InputConfig, SampledInput};
@@ -45,7 +49,9 @@ pub struct Model {
 pub struct ConfigPanel {
     model: Model,
 
-    window_container: gtk::Box,
+    project_container: Paned,
+
+    config_container: gtk::Box,
 
     input_list_container: gtk::Box,
     input_config_widget_list: HashMap<Uuid, (String, InputConfig, gtk::Box)>,
@@ -56,6 +62,10 @@ pub struct ConfigPanel {
     render_stage_order: Vec<Uuid>,
 
     final_stage_name_chooser: ComboBoxText,
+
+    control_container: gtk::Box,
+
+    glarea: GLArea,
 
     relm: Relm<Self>,
 }
@@ -86,6 +96,22 @@ impl ConfigPanel {
 
             project_config_file.write_all(&config_as_bytes).unwrap();
         }
+    }
+
+    fn start_wvr(&mut self) -> Result<()> {
+        if self.model.control_channel.is_some() {
+            return Ok(());
+        }
+
+        let order_sender = crate::wvr_frame::build_wvr_frame(
+            &self.glarea,
+            &self.model.project_path,
+            &self.model.config,
+        )?;
+
+        self.model.control_channel = Some(order_sender);
+
+        Ok(())
     }
 }
 
@@ -118,6 +144,9 @@ impl Update for ConfigPanel {
         let input_choice_list = get_input_choice_list(&self.model.config);
 
         match &event {
+            ConfigPanelMsg::StartProject => {
+                self.start_wvr().unwrap();
+            }
             ConfigPanelMsg::SetBpm(bpm) => {
                 self.model.config.bpm = *bpm as f32;
             }
@@ -271,12 +300,19 @@ impl Update for ConfigPanel {
             ConfigPanelMsg::AddRenderStage(render_stage_config) => {
                 self.created_render_stage_count += 1;
 
+                let mut available_filter_list =
+                    load_available_filter_list(&wvr_data::get_filters_path(), true).unwrap();
+                available_filter_list.extend(
+                    load_available_filter_list(&self.model.project_path.join("filters"), false)
+                        .unwrap(),
+                );
+
                 let (id, wrapper, render_stage_config_view) =
                     stage_config::build_render_stage_config_row(
                         &self.relm,
-                        &self.model.project_path,
                         render_stage_config,
                         &input_choice_list,
+                        &available_filter_list,
                     );
 
                 let page_label_container = gtk::Box::new(Horizontal, 4);
@@ -544,24 +580,22 @@ impl Update for ConfigPanel {
 }
 
 impl Widget for ConfigPanel {
-    type Root = gtk::Box;
+    type Root = Paned;
 
     fn root(&self) -> Self::Root {
-        self.window_container.clone()
+        self.project_container.clone()
     }
 
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
-        let settings = Settings::get_default().unwrap();
-        settings
-            .set_property("gtk-application-prefer-dark-theme", &true)
-            .unwrap();
-
         let mut input_config_widget_list = HashMap::new();
         let mut render_stage_config_widget_list = HashMap::new();
 
         let model = model;
 
-        let window_container = gtk::Box::new(Vertical, 0);
+        let project_container = Paned::new(Vertical);
+
+        let misc_view_container = Paned::new(Horizontal);
+        let config_container = gtk::Box::new(Vertical, 0);
 
         let tabs_container = Notebook::new();
         tabs_container.set_tab_pos(gtk::PositionType::Top);
@@ -580,6 +614,7 @@ impl Widget for ConfigPanel {
         );
 
         let render_stage_panel = gtk::Box::new(Vertical, 4);
+        render_stage_panel.set_vexpand(true);
 
         let (render_stage_config_list_container, render_stage_order) =
             stage_config::build_list_view(
@@ -614,11 +649,34 @@ impl Widget for ConfigPanel {
         tabs_container
             .get_tab_label(&render_stage_panel)
             .unwrap()
-            .set_tooltip_text(Some("Configure the rendered layers."));
+            .set_tooltip_text(Some("Configure layers."));
+
+        config_container.add(&tabs_container);
+
+        let view_container = gtk::Box::new(Vertical, 4);
+
+        let glarea_wrapper = AspectFrame::new(None, 0.5, 0.0, 16.0 / 9.0, true);
+        glarea_wrapper.set_property_margin(8);
+        glarea_wrapper.set_shadow_type(ShadowType::None);
+        glarea_wrapper.set_hexpand(true);
+        glarea_wrapper.set_vexpand(true);
+
+        let glarea = GLArea::new();
+
+        glarea.set_size_request(
+            model.config.view.width as i32 / 4,
+            model.config.view.height as i32 / 4,
+        );
+
+        glarea.set_required_version(3, 2);
+        glarea.set_hexpand(true);
+        glarea.set_vexpand(true);
+
+        glarea_wrapper.add(&glarea);
 
         // Building the row allowing selection of the texture to render
         let final_stage_row = gtk::Box::new(Horizontal, 8);
-        final_stage_row.set_property_margin(8);
+        //final_stage_row.set_property_margin(8);
 
         let final_stage_label = Label::new(Some("Displayed layer:"));
 
@@ -669,15 +727,41 @@ impl Widget for ConfigPanel {
         final_stage_row.add(&final_stage_label);
         final_stage_row.add(&final_stage_name_chooser);
 
-        window_container.add(&tabs_container);
-        window_container.add(&final_stage_row);
+        let control_container = gtk::Box::new(Horizontal, 8);
+        control_container.set_property_margin(8);
+
+        let start_button = Button::new();
+        start_button.set_label("Start");
+        start_button.set_hexpand(true);
+        connect!(
+            relm,
+            start_button,
+            connect_clicked(_),
+            Some(ConfigPanelMsg::StartProject)
+        );
+
+        control_container.add(&final_stage_row);
+        control_container.add(&start_button);
+
+        view_container.add(&glarea_wrapper);
+        view_container.add(&control_container);
+
+        misc_view_container.pack1(&config_container, true, false);
+        misc_view_container.pack2(&view_container, true, false);
+
+        project_container.pack1(&misc_view_container, true, false);
+        //project_container.pack2(&render_stage_panel, true, false);
+
+        project_container.show_all();
 
         let created_render_stage_count = model.config.render_chain.len();
 
         Self {
             model,
 
-            window_container,
+            project_container,
+
+            config_container,
 
             input_list_container,
 
@@ -689,6 +773,9 @@ impl Widget for ConfigPanel {
             render_stage_order,
 
             final_stage_name_chooser,
+
+            glarea,
+            control_container,
 
             relm: relm.clone(),
         }

@@ -47,6 +47,7 @@ pub enum ConfigPanelMsg {
 
     UpdateRenderedTextureName(SampledInput),
 
+    StartProject,
     Save,
 }
 

@@ -11,6 +11,7 @@ use super::view::{RenderStageConfigView, RenderStageConfigViewMsg};
 pub fn build_input_row(
     relm: &Relm<RenderStageConfigView>,
     input_choice_list: &[String],
+    input_name: &str,
     input_value: &SampledInput,
 ) -> (gtk::Box, ComboBoxText, ComboBoxText) {
     let outer_wrapper = gtk::Box::new(Horizontal, 8);
@@ -58,22 +59,83 @@ pub fn build_input_row(
         }
     }
     {
+        let input_name = input_name.to_owned();
+
+        let input_name_chooser = input_name_chooser.clone();
+
         let input_type_chooser = input_type_chooser.clone();
+        input_type_chooser.set_tooltip_text(Some("Sampling method"));
+
         connect!(
             relm,
             input_type_chooser,
-            connect_changed(_),
-            Some(RenderStageConfigViewMsg::UpdateInputList)
+            connect_changed(input_type_chooser),
+            {
+                let input_value = match input_type_chooser.get_active_id().unwrap().as_str() {
+                    "Linear" => SampledInput::Linear(
+                        input_name_chooser
+                            .get_active_id()
+                            .unwrap_or_else(|| glib::GString::from(""))
+                            .to_string(),
+                    ),
+                    "Nearest" => SampledInput::Nearest(
+                        input_name_chooser
+                            .get_active_id()
+                            .unwrap_or_else(|| glib::GString::from(""))
+                            .to_string(),
+                    ),
+                    "Mipmaps" => SampledInput::Mipmaps(
+                        input_name_chooser
+                            .get_active_id()
+                            .unwrap_or_else(|| glib::GString::from(""))
+                            .to_string(),
+                    ),
+                    _ => unreachable!(),
+                };
+                Some(RenderStageConfigViewMsg::UpdateInput(
+                    input_name.clone(),
+                    input_value,
+                ))
+            }
         );
     }
 
     {
+        let input_name = input_name.to_owned();
         let input_name_chooser = input_name_chooser.clone();
+        let input_type_chooser = input_type_chooser.clone();
+
         connect!(
             relm,
             input_name_chooser,
-            connect_changed(_),
-            Some(RenderStageConfigViewMsg::UpdateInputList)
+            connect_changed(input_name_chooser),
+            {
+                let input_value = match input_type_chooser.get_active_id().unwrap().as_str() {
+                    "Linear" => SampledInput::Linear(
+                        input_name_chooser
+                            .get_active_id()
+                            .unwrap_or_else(|| glib::GString::from(""))
+                            .to_string(),
+                    ),
+                    "Nearest" => SampledInput::Nearest(
+                        input_name_chooser
+                            .get_active_id()
+                            .unwrap_or_else(|| glib::GString::from(""))
+                            .to_string(),
+                    ),
+                    "Mipmaps" => SampledInput::Mipmaps(
+                        input_name_chooser
+                            .get_active_id()
+                            .unwrap_or_else(|| glib::GString::from(""))
+                            .to_string(),
+                    ),
+                    _ => unreachable!(),
+                };
+                Some(RenderStageConfigViewMsg::UpdateInput(
+                    input_name.clone(),
+                    input_value,
+                ))
+            }
         );
     }
 

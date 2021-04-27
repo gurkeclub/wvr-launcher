@@ -27,6 +27,7 @@ pub fn create_int_spinner(
         };
 
     let spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    spinner.set_has_origin(false);
     spinner.set_value(value as f64);
     spinner.set_hexpand(true);
 
@@ -59,6 +60,7 @@ pub fn create_float_spinner(
         };
 
     let spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    spinner.set_has_origin(false);
     spinner.set_value(value as f64);
     spinner.set_hexpand(true);
 
@@ -99,6 +101,7 @@ pub fn create_float2_spinner(
     let x_label = Label::new(Some("x"));
     x_label.set_text("x");
     let x_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    x_spinner.set_has_origin(false);
     x_spinner.set_value(x as f64);
     x_spinner.set_hexpand(true);
 
@@ -111,6 +114,7 @@ pub fn create_float2_spinner(
 
     let y_label = Label::new(Some("y"));
     let y_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    y_spinner.set_has_origin(false);
     y_spinner.set_value(y as f64);
     y_spinner.set_hexpand(true);
 
@@ -172,6 +176,7 @@ pub fn create_float3_spinner(
     let x_label = Label::new(Some("x"));
     x_label.set_text("x");
     let x_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    x_spinner.set_has_origin(false);
     x_spinner.set_value(x as f64);
     x_spinner.set_hexpand(true);
 
@@ -184,6 +189,7 @@ pub fn create_float3_spinner(
 
     let y_label = Label::new(Some("y"));
     let y_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    y_spinner.set_has_origin(false);
     y_spinner.set_value(y as f64);
     y_spinner.set_hexpand(true);
 
@@ -196,6 +202,7 @@ pub fn create_float3_spinner(
 
     let z_label = Label::new(Some("z"));
     let z_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    z_spinner.set_has_origin(false);
     z_spinner.set_value(z as f64);
     z_spinner.set_hexpand(true);
 
@@ -284,6 +291,7 @@ pub fn create_float4_spinner(
     let x_label = Label::new(Some("x"));
     x_label.set_text("x");
     let x_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    x_spinner.set_has_origin(false);
     x_spinner.set_value(x as f64);
     x_spinner.set_hexpand(true);
 
@@ -296,6 +304,7 @@ pub fn create_float4_spinner(
 
     let y_label = Label::new(Some("y"));
     let y_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    y_spinner.set_has_origin(false);
     y_spinner.set_value(y as f64);
     y_spinner.set_hexpand(true);
 
@@ -308,6 +317,7 @@ pub fn create_float4_spinner(
 
     let z_label = Label::new(Some("z"));
     let z_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    z_spinner.set_has_origin(false);
     z_spinner.set_value(z as f64);
     z_spinner.set_hexpand(true);
 
@@ -320,6 +330,7 @@ pub fn create_float4_spinner(
 
     let w_label = Label::new(Some("w"));
     let w_spinner = Scale::with_range(Orientation::Horizontal, min_value, max_value, step);
+    w_spinner.set_has_origin(false);
     w_spinner.set_value(w as f64);
     w_spinner.set_hexpand(true);
 
@@ -435,6 +446,7 @@ pub fn build_variable_row(
             );
 
             let wrapper = gtk::Box::new(Horizontal, 0);
+            wrapper.set_hexpand(true);
             wrapper.pack_end(&variable_switch, false, false, 0);
 
             wrapper

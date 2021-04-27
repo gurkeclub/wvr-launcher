@@ -125,11 +125,12 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "backtrace"
-version = "0.3.57"
+version = "0.3.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78ed203b9ba68b242c62b3fb7480f589dd49829be1edb3fe8fc8b4ffda2dcb8d"
+checksum = "88fb5a785d6b44fd9d6700935608639af1b8356de1e55d5f7c2740f4faa15d82"
 dependencies = [
  "addr2line",
+ "cc",
  "cfg-if 1.0.0",
  "libc",
  "miniz_oxide 0.4.4",
@@ -1596,9 +1597,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libc"
-version = "0.2.93"
+version = "0.2.94"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9385f66bf6105b241aa65a61cb923ef20efc665cb9f9bb50ac2f0c4b7f378d41"
+checksum = "18794a8ad5b29321f790b55d93dfba91e125cb1a9edbd4f8e3150acc771c1a5e"
 
 [[package]]
 name = "libgit2-sys"
@@ -3407,8 +3408,8 @@ dependencies = [
 
 [[package]]
 name = "wvr"
-version = "0.1.25"
-source = "git+https://github.com/gurkeclub/wvr.git?branch=main#93663ed02ef2b9884c35c1fa9ba5a688e8e96605"
+version = "0.1.26"
+source = "git+https://github.com/gurkeclub/wvr.git?branch=main#3d2b243ea5af2254212e2350f9b2518aa9747057"
 dependencies = [
  "anyhow",
  "clap",
@@ -3453,8 +3454,8 @@ dependencies = [
 
 [[package]]
 name = "wvr-data"
-version = "0.1.9"
-source = "git+https://github.com/gurkeclub/wvr-data.git?branch=main#e67a04883ff50912a483b8427cab4eb18827eee2"
+version = "0.1.10"
+source = "git+https://github.com/gurkeclub/wvr-data.git?branch=main#d2beae7106e83eab79d81d8fa370ff60356a7a51"
 dependencies = [
  "anyhow",
  "directories-next",
@@ -3474,7 +3475,7 @@ dependencies = [
 
 [[package]]
 name = "wvr-launcher"
-version = "0.1.15"
+version = "0.1.16"
 dependencies = [
  "anyhow",
  "gdk",
@@ -3531,8 +3532,8 @@ dependencies = [
 
 [[package]]
 name = "wvr-video"
-version = "0.1.5"
-source = "git+https://github.com/gurkeclub/wvr-video.git?branch=main#b5cae2acc5b0a4bb52bff33ad403b8f31573ba46"
+version = "0.1.6"
+source = "git+https://github.com/gurkeclub/wvr-video.git?branch=main#c8c6b3aa2089de0b7a145c0fcd798894ce51fb86"
 dependencies = [
  "anyhow",
  "gstreamer",
