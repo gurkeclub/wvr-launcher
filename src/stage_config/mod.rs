@@ -19,6 +19,7 @@ use wvr_data::config::project_config::{
     BufferPrecision, FilterConfig, FilterMode, RenderStageConfig,
 };
 
+pub mod automation;
 pub mod input;
 pub mod variable;
 pub mod view;
@@ -75,7 +76,8 @@ pub fn build_list_view(
 
     let mut available_filter_list =
         load_available_filter_list(&wvr_data::get_filters_path(), true).unwrap();
-    available_filter_list.extend(load_available_filter_list(&project_path.join("filters"), false).unwrap());
+    available_filter_list
+        .extend(load_available_filter_list(&project_path.join("filters"), false).unwrap());
 
     for render_stage_config in render_stage_config_list {
         let (id, wrapper, render_stage_config_view) = build_render_stage_config_row(

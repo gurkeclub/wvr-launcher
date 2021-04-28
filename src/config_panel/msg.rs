@@ -1,12 +1,10 @@
-use std::sync::mpsc::Sender;
-
 use uuid::Uuid;
 
 use relm_derive::Msg;
 
 use wvr_com::data::{InputUpdate, Message, RenderStageUpdate, SetInfo};
 use wvr_data::config::project_config::{
-    BufferPrecision, FilterMode, InputConfig, RenderStageConfig, SampledInput,
+    Automation, BufferPrecision, FilterMode, InputConfig, RenderStageConfig, SampledInput,
 };
 use wvr_data::DataHolder;
 
@@ -37,13 +35,12 @@ pub enum ConfigPanelMsg {
     UpdateRenderStageFilter(Uuid, String),
     UpdateRenderStageFilterModeParams(Uuid, FilterMode),
     UpdateRenderStageVariable(Uuid, String, DataHolder),
+    UpdateRenderStageVariableAutomation(Uuid, String, Automation),
     UpdateRenderStageInput(Uuid, String, SampledInput),
     UpdateRenderStagePrecision(Uuid, BufferPrecision),
     UpdateRenderStageName(Uuid, String),
     MoveStage(Uuid, usize),
     RemoveRenderStage(Uuid),
-
-    SetControlChannel(Sender<Message>),
 
     UpdateRenderedTextureName(SampledInput),
 
@@ -137,7 +134,7 @@ impl ConfigPanelMsg {
                 if let Some(stage_index) = config_panel.get_render_stage_index(stage_id) {
                     Some(Message::UpdateRenderStage(
                         stage_index,
-                        RenderStageUpdate::FilterModeParams(filter_mode_params.clone()),
+                        RenderStageUpdate::FilterModeParams(*filter_mode_params),
                     ))
                 } else {
                     None
@@ -148,6 +145,23 @@ impl ConfigPanelMsg {
                     Some(Message::UpdateRenderStage(
                         stage_index,
                         RenderStageUpdate::Variable(variable_name.clone(), variable_value.clone()),
+                    ))
+                } else {
+                    None
+                }
+            }
+            ConfigPanelMsg::UpdateRenderStageVariableAutomation(
+                stage_id,
+                variable_name,
+                variable_automation,
+            ) => {
+                if let Some(stage_index) = config_panel.get_render_stage_index(stage_id) {
+                    Some(Message::UpdateRenderStage(
+                        stage_index,
+                        RenderStageUpdate::VariableAutomation(
+                            variable_name.clone(),
+                            *variable_automation,
+                        ),
                     ))
                 } else {
                     None
@@ -167,7 +181,7 @@ impl ConfigPanelMsg {
                 if let Some(stage_index) = config_panel.get_render_stage_index(stage_id) {
                     Some(Message::UpdateRenderStage(
                         stage_index,
-                        RenderStageUpdate::Precision(precision.clone()),
+                        RenderStageUpdate::Precision(*precision),
                     ))
                 } else {
                     None

@@ -7,7 +7,6 @@ use uuid::Uuid;
 
 use anyhow::Result;
 
-use glib::object::ObjectExt;
 use glib::Cast;
 
 use gtk::prelude::{GtkListStoreExtManual, NotebookExtManual, TreeSortableExtManual};
@@ -15,7 +14,7 @@ use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
     AspectFrame, Button, ButtonExt, ComboBoxExt, ComboBoxText, ContainerExt, FrameExt, GLArea,
     GLAreaExt, GtkListStoreExt, Label, LabelExt, Notebook, NotebookExt, Paned, PanedExt,
-    ReliefStyle, Settings, ShadowType, SortColumn, SortType, WidgetExt,
+    ReliefStyle, ShadowType, SortColumn, SortType, WidgetExt,
 };
 
 use relm::{connect, Component, Relm, Update, Widget};
@@ -25,8 +24,7 @@ use strsim::levenshtein;
 
 use wvr::utils::load_available_filter_list;
 use wvr_com::data::{Message, RenderStageUpdate};
-use wvr_data::config::project_config::ProjectConfig;
-use wvr_data::config::project_config::{InputConfig, SampledInput};
+use wvr_data::config::project_config::{Automation, InputConfig, ProjectConfig, SampledInput};
 
 use crate::input_config;
 use crate::server_config;
@@ -386,9 +384,33 @@ impl Update for ConfigPanel {
                     if let Some(ref mut config) =
                         self.model.config.render_chain.get_mut(render_stage_index)
                     {
-                        config
-                            .variables
-                            .insert(variable_name.clone(), variable_value.clone());
+                        if let Some((old_variable_value, _)) =
+                            config.variables.get_mut(variable_name)
+                        {
+                            *old_variable_value = variable_value.clone();
+                        } else {
+                            config.variables.insert(
+                                variable_name.clone(),
+                                (variable_value.clone(), Automation::None),
+                            );
+                        }
+                    }
+                }
+            }
+            ConfigPanelMsg::UpdateRenderStageVariableAutomation(
+                id,
+                variable_name,
+                variable_automation,
+            ) => {
+                if let Some(render_stage_index) = self.get_render_stage_index(id) {
+                    if let Some(ref mut config) =
+                        self.model.config.render_chain.get_mut(render_stage_index)
+                    {
+                        if let Some((_, old_variable_automation)) =
+                            config.variables.get_mut(variable_name)
+                        {
+                            *old_variable_automation = *variable_automation;
+                        }
                     }
                 }
             }
@@ -408,7 +430,7 @@ impl Update for ConfigPanel {
                     if let Some(ref mut config) =
                         self.model.config.render_chain.get_mut(render_stage_index)
                     {
-                        config.filter_mode_params = new_filter_mode_params.clone();
+                        config.filter_mode_params = *new_filter_mode_params;
                     }
                 }
             }
@@ -417,7 +439,7 @@ impl Update for ConfigPanel {
                     if let Some(ref mut config) =
                         self.model.config.render_chain.get_mut(render_stage_index)
                     {
-                        config.precision = new_precision.clone();
+                        config.precision = *new_precision;
                     }
                 }
             }
@@ -478,10 +500,6 @@ impl Update for ConfigPanel {
                     .final_stage
                     .inputs
                     .insert("iChannel0".to_string(), input.clone());
-            }
-
-            ConfigPanelMsg::SetControlChannel(control_channel) => {
-                self.model.control_channel = Some(control_channel.clone());
             }
         }
 

@@ -22,13 +22,14 @@ use relm_derive::Msg;
 use strsim::levenshtein;
 
 use wvr_data::config::project_config::{
-    BufferPrecision, FilterConfig, FilterMode, RenderStageConfig, SampledInput,
+    Automation, BufferPrecision, FilterConfig, FilterMode, RenderStageConfig, SampledInput,
 };
 use wvr_data::{DataHolder, DataRange};
 
 use crate::config_panel::msg::ConfigPanelMsg;
 use crate::config_panel::view::ConfigPanel;
 
+use super::automation;
 use super::input;
 use super::variable;
 
@@ -42,6 +43,7 @@ pub enum RenderStageConfigViewMsg {
 
     UpdateInput(String, SampledInput),
     UpdateVariable(String, DataHolder),
+    UpdateVariableAutomation(String, Automation),
     UpdateInputChoiceList(Vec<String>),
 }
 
@@ -88,7 +90,7 @@ impl RenderStageConfigView {
             .stream()
             .emit(ConfigPanelMsg::UpdateRenderStageFilterModeParams(
                 self.model.id,
-                self.model.config.filter_mode_params.clone(),
+                self.model.config.filter_mode_params,
             ));
     }
 
@@ -164,7 +166,7 @@ impl RenderStageConfigView {
     pub fn set_filter(&mut self, filter_name: &str) {
         self.model.config.filter = filter_name.to_string();
         if let Some((_, filter_config, _)) = &self.model.available_filter_list.get(filter_name) {
-            self.model.config.filter_mode_params = filter_config.mode.clone();
+            self.model.config.filter_mode_params = filter_config.mode;
 
             self.filter_mode_params_container = match self.model.config.filter_mode_params {
                 FilterMode::Rectangle(_, _, _, _) => {
@@ -223,7 +225,7 @@ impl RenderStageConfigView {
                 self.filter_config_container
                     .attach(&input_name_label, 0, input_index as i32, 1, 1);
                 self.filter_config_container
-                    .attach(&input_wrapper, 1, input_index as i32, 1, 1);
+                    .attach(&input_wrapper, 1, input_index as i32, 2, 1);
 
                 self.input_widget_list.insert(
                     uniform_name.clone(),
@@ -242,7 +244,12 @@ impl RenderStageConfigView {
             for (variable_index, variable_name) in variable_name_list.iter().enumerate() {
                 let (default_value, value_range) =
                     filter_config.variables.get(variable_name).unwrap();
-                let variable_value = old_variables.get(variable_name).unwrap_or(default_value);
+                let default_value = (default_value.clone(), Automation::None);
+                let (variable_value, variable_automation) =
+                    old_variables.get(variable_name).unwrap_or(&default_value);
+
+                let variable_name_label = Label::new(Some(variable_name));
+                variable_name_label.set_xalign(0.0);
 
                 let variable_wrapper = variable::build_variable_row(
                     &self.relm,
@@ -251,8 +258,12 @@ impl RenderStageConfigView {
                     value_range,
                 );
 
-                let variable_name_label = Label::new(Some(variable_name));
-                variable_name_label.set_xalign(0.0);
+                let automation_wrapper = automation::build_automation_row(
+                    &self.relm,
+                    &variable_name,
+                    &variable_automation,
+                    &value_range,
+                );
 
                 self.filter_config_container.attach(
                     &variable_name_label,
@@ -268,11 +279,18 @@ impl RenderStageConfigView {
                     1,
                     1,
                 );
+                self.filter_config_container.attach(
+                    &automation_wrapper,
+                    2,
+                    (uniform_name_list.len() + variable_index) as i32,
+                    1,
+                    1,
+                );
 
-                self.model
-                    .config
-                    .variables
-                    .insert(variable_name.clone(), variable_value.clone());
+                self.model.config.variables.insert(
+                    variable_name.clone(),
+                    (variable_value.clone(), *variable_automation),
+                );
             }
 
             self.filter_config_container.show_all();
@@ -285,7 +303,7 @@ impl RenderStageConfigView {
                 self.model.config.filter.clone(),
             ));
 
-        for (variable_name, variable_value) in &self.model.config.variables {
+        for (variable_name, (variable_value, variable_automation)) in &self.model.config.variables {
             self.model
                 .parent_relm
                 .stream()
@@ -294,6 +312,15 @@ impl RenderStageConfigView {
                     variable_name.clone(),
                     variable_value.clone(),
                 ));
+            if !variable_automation.is_none() {
+                self.model.parent_relm.stream().emit(
+                    ConfigPanelMsg::UpdateRenderStageVariableAutomation(
+                        self.model.id,
+                        variable_name.clone(),
+                        *variable_automation,
+                    ),
+                );
+            }
         }
     }
 }
@@ -349,7 +376,7 @@ impl Update for RenderStageConfigView {
                     "F32" => BufferPrecision::F32,
                     _ => unreachable!(),
                 };
-                self.model.config.precision = new_precision.clone();
+                self.model.config.precision = new_precision;
                 self.model
                     .parent_relm
                     .stream()
@@ -378,6 +405,15 @@ impl Update for RenderStageConfigView {
                         ConfigPanelMsg::UpdateRenderStageVariable(self.model.id, name, value),
                     );
                 }
+            }
+            RenderStageConfigViewMsg::UpdateVariableAutomation(name, automation) => {
+                self.model.parent_relm.stream().emit(
+                    ConfigPanelMsg::UpdateRenderStageVariableAutomation(
+                        self.model.id,
+                        name,
+                        automation,
+                    ),
+                );
             }
             RenderStageConfigViewMsg::UpdateInputChoiceList(choice_list) => {
                 self.update_input_choice_list(&choice_list);
@@ -545,8 +581,6 @@ pub fn build_filter_config(
             let (input_wrapper, input_type_entry, input_value_entry) =
                 input::build_input_row(relm, &model.input_choice_list, &input_name, &input_value);
 
-            //filter_config_container.add(&input_wrapper);
-
             filter_config_container.attach(&input_name_label, 0, input_index as i32, 1, 1);
             filter_config_container.attach(&input_wrapper, 1, input_index as i32, 2, 1);
 
@@ -559,14 +593,23 @@ pub fn build_filter_config(
 
         for (variable_index, variable_name) in variable_name_list.iter().enumerate() {
             let (default_value, value_range) = filter_config.variables.get(variable_name).unwrap();
-            let variable_value =
-                if let Some(stage_variable_value) = model.config.variables.get(variable_name) {
-                    stage_variable_value
-                } else {
-                    default_value
-                };
+            let default_value = (default_value.clone(), Automation::None);
+
+            let (variable_value, variable_automation) = model
+                .config
+                .variables
+                .get(variable_name)
+                .unwrap_or(&default_value);
+
             let variable_wrapper =
                 variable::build_variable_row(relm, &variable_name, &variable_value, &value_range);
+
+            let automation_wrapper = automation::build_automation_row(
+                relm,
+                &variable_name,
+                &variable_automation,
+                &value_range,
+            );
 
             let variable_name_label = Label::new(Some(variable_name));
             variable_name_label.set_xalign(0.0);
@@ -578,9 +621,18 @@ pub fn build_filter_config(
                 1,
                 1,
             );
+
             filter_config_container.attach(
                 &variable_wrapper,
                 1,
+                (input_name_list.len() + variable_index) as i32,
+                1,
+                1,
+            );
+
+            filter_config_container.attach(
+                &automation_wrapper,
+                2,
                 (input_name_list.len() + variable_index) as i32,
                 1,
                 1,
