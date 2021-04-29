@@ -552,7 +552,7 @@ pub fn build_filter_config(
     let filter_config_panel = gtk::Box::new(Vertical, 16);
     let filter_config_container = gtk::Grid::new();
     filter_config_container.set_row_spacing(4);
-    filter_config_container.set_column_spacing(8);
+    filter_config_container.set_column_spacing(4);
     filter_config_container.set_orientation(Orientation::Vertical);
 
     if model

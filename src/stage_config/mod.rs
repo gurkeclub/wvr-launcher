@@ -94,7 +94,6 @@ pub fn build_list_view(
         page_label.set_hexpand(true);
 
         let remove_button = Button::new();
-        remove_button.set_relief(ReliefStyle::None);
         remove_button.set_label("x");
         {
             connect!(

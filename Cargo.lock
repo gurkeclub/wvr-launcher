@@ -1943,9 +1943,9 @@ dependencies = [
 
 [[package]]
 name = "nfd2"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cedbdc1ecacd67f890b05bf38d268cf42dd070a4b44e82b89c4757998e7250d5"
+checksum = "306127f5ff8cb7c8cd3a8cf0fc162f4dc76ed589efa01ee84eb5593e7be97f75"
 dependencies = [
  "cc",
 ]
@@ -2101,9 +2101,9 @@ checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
 
 [[package]]
 name = "openssl"
-version = "0.10.33"
+version = "0.10.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a61075b62a23fef5a29815de7536d940aa35ce96d18ce0cc5076272db678a577"
+checksum = "6d7830286ad6a3973c0f1d9b73738f69c76b739301d0229c4b96501695cbe4c8"
 dependencies = [
  "bitflags 1.2.1",
  "cfg-if 1.0.0",
@@ -2121,9 +2121,9 @@ checksum = "77af24da69f9d9341038eba93a073b1fdaaa1b788221b00a69bce9e762cb32de"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.61"
+version = "0.9.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "313752393519e876837e09e1fa183ddef0be7735868dced3196f4472d536277f"
+checksum = "fa52160d45fa2e7608d504b7c3a3355afed615e6d8b627a74458634ba21b69bd"
 dependencies = [
  "autocfg",
  "cc",
@@ -2472,9 +2472,9 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8270314b5ccceb518e7e578952f0b72b88222d02e8f77f5ecf7abbb673539041"
+checksum = "85dd92e586f7355c633911e11f77f3d12f04b1b1bd76a198bd34ae3af8341ef2"
 dependencies = [
  "bitflags 1.2.1",
 ]
@@ -3408,8 +3408,8 @@ dependencies = [
 
 [[package]]
 name = "wvr"
-version = "0.1.26"
-source = "git+https://github.com/gurkeclub/wvr.git?branch=main#1571e7b83dc534ba728d782475e5ea44ff5448f9"
+version = "0.1.27"
+source = "git+https://github.com/gurkeclub/wvr.git?branch=main#4adecbbce4f37a5b1ab6e8c8ac941911549d2a8c"
 dependencies = [
  "anyhow",
  "clap",
@@ -3429,8 +3429,8 @@ dependencies = [
 
 [[package]]
 name = "wvr-cam"
-version = "0.1.2"
-source = "git+https://github.com/gurkeclub/wvr-cam.git?branch=main#f0c30e41b479d05643bc3a73b9fcd166d38f92fa"
+version = "0.1.3"
+source = "git+https://github.com/gurkeclub/wvr-cam.git?branch=main#9a5850bdc4c0c31f138e8b55f1264aeee212616f"
 dependencies = [
  "anyhow",
  "gstreamer",
@@ -3443,8 +3443,8 @@ dependencies = [
 
 [[package]]
 name = "wvr-com"
-version = "0.1.6"
-source = "git+https://github.com/gurkeclub/wvr-com.git?branch=main#4b06cad33c7539059e1b441f9d9608e9edf94dec"
+version = "0.1.7"
+source = "git+https://github.com/gurkeclub/wvr-com.git?branch=main#6e3e80b721e759e6d0e9b58e75f9f5730e7fbdad"
 dependencies = [
  "message-io",
  "serde",
@@ -3454,8 +3454,8 @@ dependencies = [
 
 [[package]]
 name = "wvr-data"
-version = "0.1.11"
-source = "git+https://github.com/gurkeclub/wvr-data.git?branch=main#41b2da9799b050f941f06c3e7ec53cfd5de8e782"
+version = "0.1.12"
+source = "git+https://github.com/gurkeclub/wvr-data.git?branch=main#0b24a43624f3ab22963437101c5d44f638f604d0"
 dependencies = [
  "anyhow",
  "directories-next",
@@ -3475,7 +3475,7 @@ dependencies = [
 
 [[package]]
 name = "wvr-launcher"
-version = "0.1.17"
+version = "0.1.18"
 dependencies = [
  "anyhow",
  "gdk",
@@ -3494,7 +3494,6 @@ dependencies = [
  "wvr",
  "wvr-com",
  "wvr-data",
- "wvr-rendering",
 ]
 
 [[package]]
@@ -3510,8 +3509,8 @@ dependencies = [
 
 [[package]]
 name = "wvr-rendering"
-version = "0.1.17"
-source = "git+https://github.com/gurkeclub/wvr-rendering.git?branch=main#4d757d5d1db07bc548f8204aec07b824250c814e"
+version = "0.1.18"
+source = "git+https://github.com/gurkeclub/wvr-rendering.git?branch=main#39e82b4bce08cb540ebc1ee61c99d9c5d79d88ff"
 dependencies = [
  "anyhow",
  "glium",
@@ -3532,8 +3531,8 @@ dependencies = [
 
 [[package]]
 name = "wvr-video"
-version = "0.1.6"
-source = "git+https://github.com/gurkeclub/wvr-video.git?branch=main#c8c6b3aa2089de0b7a145c0fcd798894ce51fb86"
+version = "0.1.7"
+source = "git+https://github.com/gurkeclub/wvr-video.git?branch=main#c7c4aa44a1023280c0b57aefc77e92ff6dbe7969"
 dependencies = [
  "anyhow",
  "gstreamer",

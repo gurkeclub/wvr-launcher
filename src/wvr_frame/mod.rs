@@ -108,16 +108,16 @@ pub fn build_wvr_frame(
 
                     if let Message::Set(set_info) = &message {
                         match &set_info {
-                            SetInfo::Width(_) => {
+                            SetInfo::Width(width) => {
                                 glarea.set_size_request(
-                                    app.config.view.width as i32 / 4,
-                                    app.config.view.height as i32 / 4,
+                                    *width as i32 / 4,
+                                    app.get_height() as i32 / 4,
                                 );
                             }
-                            SetInfo::Height(_) => {
+                            SetInfo::Height(height) => {
                                 glarea.set_size_request(
-                                    app.config.view.width as i32 / 4,
-                                    app.config.view.height as i32 / 4,
+                                    app.get_width() as i32 / 4,
+                                    *height as i32 / 4,
                                 );
                             }
                             SetInfo::VSync(_vsync) => (),
@@ -129,22 +129,22 @@ pub fn build_wvr_frame(
                     }
                 }
 
-                if let Err(error) =
-                    app.update(&context, (resolution.0 as usize, resolution.1 as usize))
-                {
-                    eprintln!("Failed to update app: {:?}", error);
-                }
-
                 let mut frame = glium::Frame::new(context.clone(), resolution);
                 frame.clear_color(0.0, 1.0, 0.0, 1.0);
                 if let Err(error) = app.render_final_stage(&context, &mut frame) {
-                    eprintln!("Failed to render to windowc: {:?}", error);
+                    eprintln!("Failed to render to window: {:?}", error);
                 }
+                if app.is_playing() {
+                    if let Err(error) =
+                        app.update(&context, (resolution.0 as usize, resolution.1 as usize))
+                    {
+                        eprintln!("Failed to update app: {:?}", error);
+                    }
 
-                if let Err(error) = app.render_stages(&context) {
-                    eprintln!("Failed to render app: {:?}", error);
+                    if let Err(error) = app.render_stages(&context) {
+                        eprintln!("Failed to render app: {:?}", error);
+                    }
                 }
-
                 frame
                     .finish()
                     .context("Failed to finalize rendering")

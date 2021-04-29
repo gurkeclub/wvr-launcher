@@ -1,8 +1,8 @@
 use gtk::{
     prelude::{GtkListStoreExtManual, TreeSortableExtManual},
     Button, ButtonExt, ComboBoxExt, ComboBoxText, ContainerExt, Grid, GridExt, Label, LabelExt,
-    MenuButton, MenuButtonExt, OrientableExt, Orientation, Popover, PositionType, RangeExt, Scale,
-    ScaleExt, SortColumn, SortType, Switch, SwitchExt, WidgetExt,
+    MenuButton, MenuButtonExt, OrientableExt, Orientation, Popover, RangeExt, Scale, ScaleExt,
+    SortColumn, SortType, Switch, SwitchExt, WidgetExt,
 };
 use gtk::{
     BoxExt,

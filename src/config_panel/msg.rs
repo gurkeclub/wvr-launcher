@@ -45,12 +45,17 @@ pub enum ConfigPanelMsg {
     UpdateRenderedTextureName(SampledInput),
 
     StartProject,
+    PauseProject,
+    StopProject,
     Save,
 }
 
 impl ConfigPanelMsg {
     pub fn to_wvr_message(&self, config_panel: &ConfigPanel) -> Option<Message> {
         match &self {
+            ConfigPanelMsg::StartProject => Some(Message::Start),
+            ConfigPanelMsg::PauseProject => Some(Message::Pause),
+            ConfigPanelMsg::StopProject => Some(Message::Stop),
             ConfigPanelMsg::SetBpm(bpm) => Some(Message::Set(SetInfo::Bpm(*bpm))),
             ConfigPanelMsg::SetWidth(width) => Some(Message::Set(SetInfo::Width(*width as usize))),
             ConfigPanelMsg::SetHeight(height) => {

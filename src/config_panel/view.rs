@@ -9,8 +9,11 @@ use anyhow::Result;
 
 use glib::Cast;
 
-use gtk::prelude::{GtkListStoreExtManual, NotebookExtManual, TreeSortableExtManual};
 use gtk::Orientation::{Horizontal, Vertical};
+use gtk::{
+    prelude::{GtkListStoreExtManual, NotebookExtManual, TreeSortableExtManual},
+    BoxExt,
+};
 use gtk::{
     AspectFrame, Button, ButtonExt, ComboBoxExt, ComboBoxText, ContainerExt, FrameExt, GLArea,
     GLAreaExt, GtkListStoreExt, Label, LabelExt, Notebook, NotebookExt, Paned, PanedExt,
@@ -97,17 +100,15 @@ impl ConfigPanel {
     }
 
     fn start_wvr(&mut self) -> Result<()> {
-        if self.model.control_channel.is_some() {
-            return Ok(());
+        if self.model.control_channel.is_none() {
+            let order_sender = crate::wvr_frame::build_wvr_frame(
+                &self.glarea,
+                &self.model.project_path,
+                &self.model.config,
+            )?;
+
+            self.model.control_channel = Some(order_sender);
         }
-
-        let order_sender = crate::wvr_frame::build_wvr_frame(
-            &self.glarea,
-            &self.model.project_path,
-            &self.model.config,
-        )?;
-
-        self.model.control_channel = Some(order_sender);
 
         Ok(())
     }
@@ -145,6 +146,8 @@ impl Update for ConfigPanel {
             ConfigPanelMsg::StartProject => {
                 self.start_wvr().unwrap();
             }
+            ConfigPanelMsg::PauseProject => (),
+            ConfigPanelMsg::StopProject => (),
             ConfigPanelMsg::SetBpm(bpm) => {
                 self.model.config.bpm = *bpm as f32;
             }
@@ -610,9 +613,9 @@ impl Widget for ConfigPanel {
 
         let model = model;
 
-        let project_container = Paned::new(Vertical);
+        let project_container = Paned::new(Horizontal);
 
-        let misc_view_container = Paned::new(Horizontal);
+        let misc_view_container = Paned::new(Vertical);
         let config_container = gtk::Box::new(Vertical, 0);
 
         let tabs_container = Notebook::new();
@@ -645,15 +648,17 @@ impl Widget for ConfigPanel {
 
         render_stage_panel.add(&render_stage_config_list_container);
 
-        tabs_container.append_page(&view_config_widget, Some(&Label::new(Some("General"))));
+        //tabs_container.append_page(&view_config_widget, Some(&Label::new(Some("General"))));
         tabs_container.append_page(&server_config_panel, Some(&Label::new(Some("Server"))));
         tabs_container.append_page(&input_list_panel, Some(&Label::new(Some("Inputs"))));
         tabs_container.append_page(&render_stage_panel, Some(&Label::new(Some("Layers"))));
 
+        /*
         tabs_container
             .get_tab_label(&view_config_widget)
             .unwrap()
             .set_tooltip_text(Some("Configure general parameters."));
+            */
         tabs_container
             .get_tab_label(&server_config_panel)
             .unwrap()
@@ -672,29 +677,34 @@ impl Widget for ConfigPanel {
         config_container.add(&tabs_container);
 
         let view_container = gtk::Box::new(Vertical, 4);
+        view_container.set_hexpand(true);
+        view_container.set_vexpand(true);
+        view_container.set_property_margin(8);
 
-        let glarea_wrapper = AspectFrame::new(None, 0.5, 0.0, 16.0 / 9.0, true);
-        glarea_wrapper.set_property_margin(8);
-        glarea_wrapper.set_shadow_type(ShadowType::None);
-        glarea_wrapper.set_hexpand(true);
-        glarea_wrapper.set_vexpand(true);
+        let control_container = gtk::Box::new(Horizontal, 2);
 
-        let glarea = GLArea::new();
-
-        glarea.set_size_request(
-            model.config.view.width as i32 / 4,
-            model.config.view.height as i32 / 4,
+        let pause_button = Button::new();
+        pause_button.set_label("Pause");
+        pause_button.set_hexpand(true);
+        connect!(
+            relm,
+            pause_button,
+            connect_clicked(_),
+            Some(ConfigPanelMsg::PauseProject)
         );
 
-        glarea.set_required_version(3, 2);
-        glarea.set_hexpand(true);
-        glarea.set_vexpand(true);
-
-        glarea_wrapper.add(&glarea);
+        let start_button = Button::new();
+        start_button.set_label("Start");
+        start_button.set_hexpand(true);
+        connect!(
+            relm,
+            start_button,
+            connect_clicked(_),
+            Some(ConfigPanelMsg::StartProject)
+        );
 
         // Building the row allowing selection of the texture to render
         let final_stage_row = gtk::Box::new(Horizontal, 8);
-        //final_stage_row.set_property_margin(8);
 
         let final_stage_label = Label::new(Some("Displayed layer:"));
 
@@ -742,33 +752,42 @@ impl Widget for ConfigPanel {
             );
         }
 
-        final_stage_row.add(&final_stage_label);
-        final_stage_row.add(&final_stage_name_chooser);
+        //final_stage_row.add(&final_stage_label);
+        //final_stage_row.add(&final_stage_name_chooser);
 
-        let control_container = gtk::Box::new(Horizontal, 8);
-        control_container.set_property_margin(8);
-
-        let start_button = Button::new();
-        start_button.set_label("Start");
-        start_button.set_hexpand(true);
-        connect!(
-            relm,
-            start_button,
-            connect_clicked(_),
-            Some(ConfigPanelMsg::StartProject)
-        );
-
-        control_container.add(&final_stage_row);
+        control_container.add(&final_stage_name_chooser);
+        control_container.add(&pause_button);
         control_container.add(&start_button);
 
+        let glarea_wrapper = AspectFrame::new(None, 0.5, 0.5, 16.0 / 9.0, true);
+        glarea_wrapper.set_shadow_type(ShadowType::None);
+        glarea_wrapper.set_hexpand(true);
+        glarea_wrapper.set_vexpand(true);
+        glarea_wrapper.set_label_align(0.5, 0.0);
+        glarea_wrapper.set_label_widget(Some(&control_container));
+
+        let glarea = GLArea::new();
+
+        glarea.set_size_request(
+            model.config.view.width as i32 / 4,
+            model.config.view.height as i32 / 4,
+        );
+
+        glarea.set_required_version(3, 2);
+        glarea.set_hexpand(true);
+        glarea.set_vexpand(true);
+
+        glarea_wrapper.add(&glarea);
+
         view_container.add(&glarea_wrapper);
-        view_container.add(&control_container);
+        //view_container.add(&control_container);
+        //view_container.add(&final_stage_row);
 
-        misc_view_container.pack1(&config_container, true, false);
-        misc_view_container.pack2(&view_container, true, false);
+        misc_view_container.pack1(&view_container, true, false);
+        misc_view_container.pack2(&view_config_widget, true, false);
 
-        project_container.pack1(&misc_view_container, true, false);
-        //project_container.pack2(&render_stage_panel, true, false);
+        project_container.pack1(&config_container, true, false);
+        project_container.pack2(&misc_view_container, true, false);
 
         project_container.show_all();
 
