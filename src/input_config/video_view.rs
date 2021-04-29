@@ -5,12 +5,10 @@ use std::{
 
 use uuid::Uuid;
 
-use gdk::RGBA;
-use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
     Adjustment, ContainerExt, EditableSignals, Entry, EntryExt, FileChooserAction,
-    FileChooserButton, FileChooserButtonExt, FileChooserExt, Label, LabelExt, RadioButton,
-    SpinButton, StateFlags, ToggleButtonExt, WidgetExt,
+    FileChooserButton, FileChooserButtonExt, FileChooserExt, GridExt, Label, LabelExt,
+    OrientableExt, Orientation, RadioButton, SpinButton, ToggleButtonExt, WidgetExt,
 };
 
 use relm::{connect, Relm};
@@ -27,17 +25,11 @@ pub fn build_video_view(
     id: Uuid,
     name: &str,
     config: &InputConfig,
-) -> gtk::Box {
-    let root = gtk::Box::new(Vertical, 0);
-    root.override_background_color(
-        StateFlags::NORMAL,
-        Some(&RGBA {
-            red: 0.0,
-            green: 0.0,
-            blue: 0.0,
-            alpha: 0.125,
-        }),
-    );
+) -> gtk::Grid {
+    let root = gtk::Grid::new();
+    root.set_row_spacing(4);
+    root.set_column_spacing(4);
+    root.set_orientation(Orientation::Vertical);
 
     if let InputConfig::Video {
         path,
@@ -46,9 +38,6 @@ pub fn build_video_view(
         speed,
     } = &config
     {
-        let name_row = gtk::Box::new(Horizontal, 8);
-        name_row.set_property_margin(8);
-
         let name_label = Label::new(Some("Name: "));
         name_label.set_xalign(0.0);
         name_label.set_size_request(48, 0);
@@ -66,11 +55,8 @@ pub fn build_video_view(
             )
         );
 
-        name_row.add(&name_label);
-        name_row.add(&name_entry);
-
-        let video_path_row = gtk::Box::new(Horizontal, 8);
-        video_path_row.set_property_margin(8);
+        root.attach(&name_label, 0, 0, 1, 1);
+        root.attach(&name_entry, 1, 0, 1, 1);
 
         let video_path_label = Label::new(Some("Path: "));
         video_path_label.set_xalign(0.0);
@@ -106,16 +92,15 @@ pub fn build_video_view(
             }
         );
 
-        video_path_row.add(&video_path_label);
-        video_path_row.add(&video_path);
+        root.attach(&video_path_label, 0, 1, 1, 1);
+        root.attach(&video_path, 1, 1, 1, 1);
 
         // Resolution row creation
-        let resolution_row = gtk::Box::new(Horizontal, 8);
-        resolution_row.set_property_margin(8);
-
         let resolution_label = Label::new(Some("Size: "));
         resolution_label.set_xalign(0.0);
         resolution_label.set_size_request(48, 0);
+
+        let resolution_row = gtk::Box::new(Orientation::Horizontal, 4);
 
         let width_spin_button = SpinButton::new(
             Some(&Adjustment::new(
@@ -171,16 +156,17 @@ pub fn build_video_view(
             }
         );
 
-        resolution_row.add(&resolution_label);
         resolution_row.add(&width_spin_button);
         resolution_row.add(&Label::new(Some("x")));
         resolution_row.add(&height_spin_button);
 
-        // Speed row creation
-        let speed_row = gtk::Box::new(Horizontal, 8);
-        speed_row.set_property_margin(8);
+        root.attach(&resolution_label, 0, 2, 1, 1);
+        root.attach(&resolution_row, 1, 2, 1, 1);
 
-        let padding = gtk::Box::new(Horizontal, 0);
+        // Speed row creation
+        let speed_row = gtk::Box::new(Orientation::Horizontal, 4);
+
+        let padding = gtk::Box::new(Orientation::Horizontal, 0);
         padding.set_hexpand(true);
 
         let speed_type_button_fps = RadioButton::with_label("Fps");
@@ -287,16 +273,13 @@ pub fn build_video_view(
             );
         }
 
-        speed_row.add(&Label::new(Some("Speed: ")));
         speed_row.add(&padding);
         speed_row.add(&speed_type_button_fps);
         speed_row.add(&speed_type_button_beats);
         speed_row.add(&speed_spin_button);
 
-        root.add(&name_row);
-        root.add(&video_path_row);
-        root.add(&resolution_row);
-        root.add(&speed_row);
+        root.attach(&Label::new(Some("Speed: ")), 0, 3, 1, 1);
+        root.attach(&speed_row, 1, 3, 1, 1);
 
         root
     } else {

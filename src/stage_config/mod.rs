@@ -5,12 +5,12 @@ use std::sync::Mutex;
 
 use uuid::Uuid;
 
-use gtk::Orientation::Horizontal;
 use gtk::{prelude::NotebookExtManual, NotebookExt};
 use gtk::{
-    Button, ButtonExt, ContainerExt, Label, LabelExt, Notebook, PackType, ReliefStyle, TreeIter,
-    TreeModel, TreeModelExt, WidgetExt,
+    Button, ButtonExt, ContainerExt, Label, LabelExt, Notebook, PackType, TreeIter, TreeModel,
+    TreeModelExt, WidgetExt,
 };
+use gtk::{Orientation::Horizontal, ReliefStyle};
 
 use relm::{connect, Cast, Component, ContainerWidget, Relm};
 
@@ -95,6 +95,7 @@ pub fn build_list_view(
 
         let remove_button = Button::new();
         remove_button.set_label("x");
+        remove_button.set_relief(ReliefStyle::None);
         {
             connect!(
                 relm,

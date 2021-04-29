@@ -3,10 +3,9 @@ use std::path::Path;
 
 use uuid::Uuid;
 
-use gdk::RGBA;
 use gtk::{
     Adjustment, Button, ButtonExt, ContainerExt, Label, ScrolledWindow, ScrolledWindowExt,
-    StateFlags, WidgetExt,
+    WidgetExt,
 };
 use gtk::{
     Orientation::{Horizontal, Vertical},
@@ -123,48 +122,15 @@ pub fn build_input_config_row(
 ) -> (Uuid, gtk::Box) {
     let id = Uuid::new_v4();
     let wrapper = gtk::Box::new(Horizontal, 2);
-    let (label_name, label_color) = match input_config {
-        InputConfig::Cam { .. } => (
-            "Camera",
-            RGBA {
-                red: 0.0,
-                green: 0.0,
-                blue: 1.0,
-                alpha: 0.125,
-            },
-        ),
-        InputConfig::Video { .. } => (
-            "Video",
-            RGBA {
-                red: 1.0,
-                green: 0.0,
-                blue: 0.0,
-                alpha: 0.125,
-            },
-        ),
-        InputConfig::Picture { .. } => (
-            "Picture",
-            RGBA {
-                red: 0.0,
-                green: 1.0,
-                blue: 0.0,
-                alpha: 0.125,
-            },
-        ),
-        InputConfig::Midi { .. } => (
-            "Midi",
-            RGBA {
-                red: 1.0,
-                green: 1.0,
-                blue: 0.0,
-                alpha: 0.125,
-            },
-        ),
+    let label_name = match input_config {
+        InputConfig::Cam { .. } => emoji::objects::light_and_video::VIDEO_CAMERA,
+        InputConfig::Video { .. } => emoji::objects::light_and_video::FILM_FRAMES,
+        InputConfig::Picture { .. } => emoji::activities::arts_and_crafts::FRAMED_PICTURE,
+        InputConfig::Midi { .. } => emoji::objects::music::CONTROL_KNOBS,
     };
 
     let row_label = Label::new(Some(label_name));
     row_label.set_size_request(64, 0);
-    row_label.override_background_color(StateFlags::NORMAL, Some(&label_color));
 
     let remove_button = Button::new();
     remove_button.set_label("Delete");

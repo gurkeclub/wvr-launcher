@@ -351,7 +351,7 @@ pub fn build_automation_row(
     variable_automation: &Automation,
     variable_range: &DataRange,
 ) -> MenuButton {
-    let automation_button_label = Label::new(Some(";)"));
+    let automation_button_label = Label::new(Some(emoji::objects::tool::GEAR));
     let automation_button = MenuButton::new();
     automation_button.add(&automation_button_label);
 

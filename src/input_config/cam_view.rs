@@ -1,10 +1,8 @@
 use uuid::Uuid;
 
-use gdk::RGBA;
-use gtk::Orientation::{Horizontal, Vertical};
 use gtk::{
-    Adjustment, ContainerExt, EditableSignals, Entry, EntryExt, Label, LabelExt, SpinButton,
-    StateFlags, WidgetExt,
+    Adjustment, ContainerExt, EditableSignals, Entry, EntryExt, GridExt, Label, LabelExt,
+    OrientableExt, Orientation, SpinButton, WidgetExt,
 };
 
 use relm::{connect, Relm};
@@ -19,17 +17,11 @@ pub fn build_cam_view(
     id: Uuid,
     name: &str,
     config: &InputConfig,
-) -> gtk::Box {
-    let root = gtk::Box::new(Vertical, 0);
-    root.override_background_color(
-        StateFlags::NORMAL,
-        Some(&RGBA {
-            red: 0.0,
-            green: 0.0,
-            blue: 0.0,
-            alpha: 0.125,
-        }),
-    );
+) -> gtk::Grid {
+    let root = gtk::Grid::new();
+    root.set_row_spacing(4);
+    root.set_column_spacing(4);
+    root.set_orientation(Orientation::Vertical);
 
     if let InputConfig::Cam {
         path,
@@ -37,12 +29,8 @@ pub fn build_cam_view(
         height,
     } = config
     {
-        let name_row = gtk::Box::new(Horizontal, 8);
-        name_row.set_property_margin(8);
-
         let name_label = Label::new(Some("Name: "));
         name_label.set_xalign(0.0);
-        name_label.set_size_request(48, 0);
 
         let name_entry = Entry::new();
         name_entry.set_text(name);
@@ -56,16 +44,12 @@ pub fn build_cam_view(
                 InputConfigViewMsg::SetName(val.get_text().to_string())
             )
         );
+        root.attach(&name_label, 0, 0, 1, 1);
+        root.attach(&name_entry, 1, 0, 1, 1);
 
-        name_row.add(&name_label);
-        name_row.add(&name_entry);
-
-        let cam_path_row = gtk::Box::new(Horizontal, 8);
-        cam_path_row.set_property_margin(8);
-
+        //Path row creation
         let cam_path_label = Label::new(Some("Path: "));
         cam_path_label.set_xalign(0.0);
-        cam_path_label.set_size_request(48, 0);
 
         let cam_path = Entry::new();
         cam_path.set_text(&path);
@@ -80,19 +64,14 @@ pub fn build_cam_view(
             )
         );
 
-        cam_path_row.add(&cam_path_label);
-        cam_path_row.add(&cam_path);
+        root.attach(&cam_path_label, 0, 1, 1, 1);
+        root.attach(&cam_path, 1, 1, 1, 1);
 
         // Resolution row creation
-        let resolution_row = gtk::Box::new(Horizontal, 8);
-        resolution_row.set_property_margin(8);
-
         let resolution_label = Label::new(Some("Size: "));
         resolution_label.set_xalign(0.0);
-        resolution_label.set_size_request(48, 0);
 
-        let padding = gtk::Box::new(Horizontal, 0);
-        padding.set_hexpand(true);
+        let resolution_row = gtk::Box::new(Orientation::Horizontal, 4);
 
         let width_spin_button = SpinButton::new(
             Some(&Adjustment::new(
@@ -148,14 +127,12 @@ pub fn build_cam_view(
             }
         );
 
-        resolution_row.add(&resolution_label);
         resolution_row.add(&width_spin_button);
         resolution_row.add(&Label::new(Some("x")));
         resolution_row.add(&height_spin_button);
 
-        root.add(&name_row);
-        root.add(&cam_path_row);
-        root.add(&resolution_row);
+        root.attach(&resolution_label, 0, 2, 1, 1);
+        root.attach(&resolution_row, 1, 2, 1, 1);
 
         root
     } else {

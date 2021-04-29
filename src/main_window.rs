@@ -6,7 +6,7 @@ use relm_derive::Msg;
 use glib::object::ObjectExt;
 use gtk::prelude::*;
 
-use gtk::Orientation::{Horizontal, Vertical};
+use gtk::Orientation;
 use gtk::{
     AccelFlags, AccelGroup, ButtonsType, ContainerExt, DialogBuilder, DialogExt, Entry, EntryExt,
     GtkWindowExt, Inhibit, Menu, MenuBar, MenuItem, MessageDialogBuilder, MessageType,
@@ -301,11 +301,11 @@ impl Widget for MainWindow {
         let accel_group = AccelGroup::new();
         window.add_accel_group(&accel_group);
 
-        let v_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        let v_box = gtk::Box::new(Orientation::Vertical, 0);
 
         v_box.pack_start(&build_menu_bar(relm, &accel_group), false, false, 0);
 
-        let config_panel_container = gtk::Box::new(Vertical, 0);
+        let config_panel_container = gtk::Box::new(Orientation::Vertical, 0);
 
         config_panel_container.add(&welcome_panel::build_welcome_panel(relm));
 

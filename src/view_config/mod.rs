@@ -15,98 +15,6 @@ pub fn build_view(relm: &Relm<ConfigPanel>, bpm: f64, view_config: &ViewConfig) 
     let view_config_container = gtk::Box::new(Vertical, 2);
     view_config_container.set_property_margin(8);
 
-    // BPM row creation
-    let bpm_row = gtk::Box::new(Horizontal, 8);
-
-    let padding = gtk::Box::new(Horizontal, 0);
-    padding.set_hexpand(true);
-
-    let bpm_spin_button = SpinButton::new(
-        Some(&Adjustment::new(bpm, 0.0, 300.0, 0.01, 0.10, 1.0)),
-        1.0,
-        2,
-    );
-    connect!(
-        relm,
-        bpm_spin_button,
-        connect_changed(val),
-        if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-            Some(ConfigPanelMsg::SetBpm(value))
-        } else {
-            None
-        }
-    );
-
-    bpm_row.add(&Label::new(Some("Bpm: ")));
-    bpm_row.add(&padding);
-    bpm_row.add(&bpm_spin_button);
-
-    // Width row creation
-    let width_row = gtk::Box::new(Horizontal, 8);
-
-    let padding = gtk::Box::new(Horizontal, 0);
-    padding.set_hexpand(true);
-
-    let width_spin_button = SpinButton::new(
-        Some(&Adjustment::new(
-            view_config.width as f64,
-            0.0,
-            8192.0,
-            1.0,
-            10.0,
-            10.0,
-        )),
-        1.0,
-        0,
-    );
-    connect!(
-        relm,
-        width_spin_button,
-        connect_changed(val),
-        if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-            Some(ConfigPanelMsg::SetWidth(value as i64))
-        } else {
-            None
-        }
-    );
-
-    width_row.add(&Label::new(Some("Width: ")));
-    width_row.add(&padding);
-    width_row.add(&width_spin_button);
-
-    // Height row creation
-    let height_row = gtk::Box::new(Horizontal, 8);
-
-    let padding = gtk::Box::new(Horizontal, 0);
-    padding.set_hexpand(true);
-
-    let height_spin_button = SpinButton::new(
-        Some(&Adjustment::new(
-            view_config.height as f64,
-            0.0,
-            8192.0,
-            1.0,
-            10.0,
-            10.0,
-        )),
-        1.0,
-        0,
-    );
-    connect!(
-        relm,
-        height_spin_button,
-        connect_changed(val),
-        if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-            Some(ConfigPanelMsg::SetHeight(value as i64))
-        } else {
-            None
-        }
-    );
-
-    height_row.add(&Label::new(Some("Height: ")));
-    height_row.add(&padding);
-    height_row.add(&height_spin_button);
-
     // Fullscreen activation row creation
     let fullscreen_row = gtk::Box::new(Horizontal, 8);
 
@@ -226,17 +134,11 @@ pub fn build_view(relm: &Relm<ConfigPanel>, bpm: f64, view_config: &ViewConfig) 
     locked_speed_row.add(&locked_speed_switch);
     locked_speed_row.add(&target_fps_spin_button);
 
-    view_config_container.add(&bpm_row);
-    view_config_container.add(&width_row);
-    view_config_container.add(&height_row);
     view_config_container.add(&locked_speed_row);
-
     view_config_container.add(&fullscreen_row);
     view_config_container.add(&dynamic_size_row);
     view_config_container.add(&vsync_row);
     view_config_container.add(&screenshot_row);
-
-    //view_config_container.add(&target_fps_row);
 
     view_config_container
 }

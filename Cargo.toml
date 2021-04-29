@@ -1,6 +1,6 @@
 [package]
 name = "wvr-launcher"
-version = "0.1.18"
+version = "0.1.19"
 authors = ["gurke.club <contact@gurke.club>"]
 edition = "2018"
 
@@ -17,6 +17,7 @@ serde_json = "1.0"
 nfd2 = "0.3" 
 strsim = "0.10"
 path-calculate = "0.1"
+emoji = "0.1"
 
 glium = "0.29"
 gl_loader = "0.1.2"

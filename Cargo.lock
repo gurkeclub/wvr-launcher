@@ -669,6 +669,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
+name = "emoji"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "506d35d47ba8e07daae224b0780f134df0bda5d2e95e0c498d650b662534dd73"
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3475,9 +3481,10 @@ dependencies = [
 
 [[package]]
 name = "wvr-launcher"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "anyhow",
+ "emoji",
  "gdk",
  "gio",
  "gl_loader",
