@@ -11,7 +11,7 @@ use crate::config_panel::view::ConfigPanel;
 
 use wvr_data::config::project_config::ViewConfig;
 
-pub fn build_view(relm: &Relm<ConfigPanel>, bpm: f64, view_config: &ViewConfig) -> gtk::Box {
+pub fn build_view(relm: &Relm<ConfigPanel>, view_config: &ViewConfig) -> gtk::Box {
     let view_config_container = gtk::Box::new(Vertical, 2);
     view_config_container.set_property_margin(8);
 

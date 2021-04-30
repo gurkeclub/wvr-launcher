@@ -1,7 +1,12 @@
-use std::path::{Path, PathBuf};
 use std::sync::mpsc::Sender;
+use std::thread;
 use std::{collections::HashMap, sync::atomic::AtomicBool};
 use std::{io::Write, sync::atomic::Ordering};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
+use std::{sync::mpsc::channel, time::Duration};
 
 use uuid::Uuid;
 
@@ -100,12 +105,61 @@ impl ConfigPanel {
     }
 
     fn start_wvr(&mut self) -> Result<()> {
-        if self.model.control_channel.is_none() {
-            let order_sender = crate::wvr_frame::build_wvr_frame(
-                &self.glarea,
-                &self.model.project_path,
-                &self.model.config,
-            )?;
+        if let Some(control_channel) = &mut self.model.control_channel {
+            if control_channel.send(Message::Start).is_ok() {
+                return Ok(());
+            }
+        }
+
+        if !self.model.config.server.enable {
+            if self.model.control_channel.is_none() {
+                let order_sender = crate::wvr_frame::build_wvr_frame(
+                    &self.glarea,
+                    &self.model.project_path,
+                    &self.model.config,
+                )?;
+
+                self.model.control_channel = Some(order_sender);
+            }
+        } else {
+            let (order_sender, order_reciever) = channel();
+            let mut client = None;
+            let server_config = self.model.config.server.clone();
+
+            if let Ok(new_client) = wvr_com::client::OrderClient::new(&server_config) {
+                client = Some(new_client);
+            } else if server_config.ip == "127.0.0.1" {
+                let config_path = self.model.project_path.join("config.tmp.json");
+
+                self.save_config(&config_path);
+
+                thread::spawn(move || {
+                    Command::new("wvr")
+                        .arg("-c")
+                        .arg(config_path.to_str().unwrap())
+                        .output()
+                        .expect("failed to execute process");
+                });
+            }
+
+            thread::spawn(move || {
+                while client.is_none() {
+                    if let Ok(new_client) = wvr_com::client::OrderClient::new(&server_config) {
+                        client = Some(new_client);
+                    } else {
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                }
+
+                let mut client = client.unwrap();
+                client.send_order(Message::Start).unwrap();
+
+                for order in order_reciever {
+                    if !client.send_order(order).unwrap() {
+                        break;
+                    }
+                }
+            });
 
             self.model.control_channel = Some(order_sender);
         }
@@ -585,10 +639,17 @@ impl Update for ConfigPanel {
             }
         }
 
+        let mut sender_disconnected = false;
         if let Some(control_channel) = &mut self.model.control_channel {
             for message in render_stage_update_message_list {
-                control_channel.send(message).unwrap();
+                if control_channel.send(message).is_err() {
+                    sender_disconnected = true;
+                    break;
+                }
             }
+        }
+        if sender_disconnected {
+            self.model.control_channel = None;
         }
 
         self.model
@@ -622,8 +683,7 @@ impl Widget for ConfigPanel {
         tabs_container.set_tab_pos(gtk::PositionType::Top);
         tabs_container.set_show_border(false);
 
-        let view_config_panel =
-            view_config::build_view(relm, model.config.bpm as f64, &model.config.view);
+        let view_config_panel = view_config::build_view(relm, &model.config.view);
 
         let server_config_panel = server_config::build_view(relm, &model.config.server);
 
@@ -883,14 +943,14 @@ fn build_control_widget(
     start_button.set_label(emoji::symbols::av_symbol::PLAY_BUTTON);
 
     let play_state = AtomicBool::new(false);
-    connect!(relm, start_button.clone(), connect_clicked(start_button), {
+    connect!(relm, start_button, connect_clicked(start_button), {
         if play_state.load(Ordering::Relaxed) {
             play_state.store(false, Ordering::Relaxed);
-            start_button.set_label(emoji::symbols::av_symbol::PAUSE_BUTTON);
+            start_button.set_label(emoji::symbols::av_symbol::PLAY_BUTTON);
             ConfigPanelMsg::PauseProject
         } else {
             play_state.store(true, Ordering::Relaxed);
-            start_button.set_label(emoji::symbols::av_symbol::PLAY_BUTTON);
+            start_button.set_label(emoji::symbols::av_symbol::PAUSE_BUTTON);
             ConfigPanelMsg::StartProject
         }
     });

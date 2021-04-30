@@ -77,12 +77,13 @@ pub fn build_wvr_frame(
         {
             let order_sender = order_sender.clone();
             if project_config.server.enable {
-                let mut order_server = OrderServer::new(&project_config.server);
-                thread::spawn(move || loop {
-                    order_sender
-                        .send(order_server.next_order(None).unwrap())
-                        .unwrap();
-                });
+                if let Ok(mut order_server) = OrderServer::new(&project_config.server) {
+                    thread::spawn(move || loop {
+                        order_sender
+                            .send(order_server.next_order(None).unwrap())
+                            .unwrap();
+                    });
+                }
             }
         }
 
