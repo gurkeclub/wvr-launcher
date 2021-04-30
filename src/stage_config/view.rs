@@ -454,26 +454,6 @@ impl Widget for RenderStageConfigView {
             build_filter_chooser(relm, &model.available_filter_list, &model.config.filter);
         filter_chooser_button.set_tooltip_text(Some("Used filter"));
 
-        // Building of the filter_mode_params selection widget
-        let filter_mode_params_label = Label::new(None);
-        filter_mode_params_label.set_xalign(0.0);
-
-        let filter_mode_params_container = match model.config.filter_mode_params {
-            FilterMode::Rectangle(_, _, _, _) => {
-                filter_mode_params_label.set_text("");
-                gtk::Box::new(Horizontal, 0)
-            }
-            FilterMode::Particles(count) => {
-                filter_mode_params_label.set_text("Particle count: ");
-                variable::create_int_spinner(
-                    relm,
-                    "_FILTER_MODE_PARAMS",
-                    count as i64,
-                    &DataRange::IntRange(1, 1_000_000, 1),
-                )
-            }
-        };
-
         // Building of the precision selection widget
         let available_precisions = ["U8", "F16", "F32"];
         let precision_store = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
@@ -509,14 +489,56 @@ impl Widget for RenderStageConfigView {
             );
         }
 
+        let filter_mode_params_button = MenuButton::new();
+        filter_mode_params_button.add(&Label::new(Some(emoji::objects::tool::GEAR)));
+
+        let filter_mode_params_popover = Popover::new(Some(&filter_mode_params_button));
+        filter_mode_params_button.set_popover(Some(&filter_mode_params_popover));
+
+        let filter_mode_params_wrapper = gtk::Box::new(Horizontal, 4);
+        filter_mode_params_wrapper.set_property_margin(2);
+        filter_mode_params_wrapper.set_property_width_request(320);
+
+        // Building of the filter_mode_params selection widget
+        let filter_mode_params_label = Label::new(None);
+        filter_mode_params_label.set_xalign(0.0);
+
+        let filter_mode_params_container = match model.config.filter_mode_params {
+            FilterMode::Rectangle(x_a, y_a, x_b, y_b) => {
+                filter_mode_params_label.set_text("Drawn rectangle: ");
+                variable::create_float4_spinner(
+                    relm,
+                    "_FILTER_MODE_PARAMS",
+                    x_a as f64,
+                    y_a as f64,
+                    x_b as f64,
+                    y_b as f64,
+                    &DataRange::FloatRange(0.0, 1.0, 0.0001),
+                )
+            }
+            FilterMode::Particles(count) => {
+                filter_mode_params_label.set_text("Particle count: ");
+                variable::create_int_spinner(
+                    relm,
+                    "_FILTER_MODE_PARAMS",
+                    count as i64,
+                    &DataRange::IntRange(1, 1_000_000, 1),
+                )
+            }
+        };
+        filter_mode_params_wrapper.add(&filter_mode_params_label);
+        filter_mode_params_wrapper.add(&filter_mode_params_container);
+
+        filter_mode_params_popover.add(&filter_mode_params_wrapper);
+        filter_mode_params_wrapper.show_all();
+
         //base_config.attach(&name_label, 0, 0, 1, 1);
         base_config.add(&name_entry);
 
         base_config.add(&filter_chooser_button);
         base_config.add(&precision_chooser);
 
-        base_config.add(&filter_mode_params_label);
-        base_config.add(&filter_mode_params_container);
+        base_config.add(&filter_mode_params_button);
 
         let (filter_config_container, filter_config_panel, input_widget_list) =
             build_filter_config(relm, &model);

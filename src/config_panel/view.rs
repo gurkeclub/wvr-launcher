@@ -59,19 +59,19 @@ pub struct Model {
 pub struct ConfigPanel {
     model: Model,
 
-    project_container: Paned,
+    root: gtk::Box,
+
+    final_stage_name_chooser: ComboBoxText,
 
     input_list_container: gtk::Box,
     input_config_widget_list: HashMap<Uuid, (String, InputConfig, gtk::Box)>,
 
-    created_render_stage_count: usize,
     render_stage_config_list_container: Notebook,
     render_stage_config_widget_list: HashMap<Uuid, (Component<RenderStageConfigView>, gtk::Box)>,
     render_stage_order: Vec<Uuid>,
+    created_render_stage_count: usize,
 
-    final_stage_name_chooser: ComboBoxText,
-
-    glarea: GLArea,
+    view_container: gtk::Box,
 
     relm: Relm<Self>,
 }
@@ -113,8 +113,33 @@ impl ConfigPanel {
 
         if !self.model.config.server.enable {
             if self.model.control_channel.is_none() {
+                let glarea_wrapper = AspectFrame::new(None, 0.5, 0.0, 16.0 / 9.0, true);
+
+                glarea_wrapper.set_shadow_type(ShadowType::None);
+                glarea_wrapper.set_hexpand(true);
+                glarea_wrapper.set_vexpand(true);
+
+                let glarea = GLArea::new();
+
+                glarea.set_size_request(
+                    self.model.config.view.width as i32 / 4,
+                    self.model.config.view.height as i32 / 4,
+                );
+
+                glarea.set_required_version(3, 2);
+                glarea.set_hexpand(true);
+                glarea.set_vexpand(true);
+
+                glarea_wrapper.add(&glarea);
+
+                for children in &self.view_container.get_children() {
+                    self.view_container.remove(children);
+                }
+
+                self.view_container.add(&glarea_wrapper);
+                self.view_container.show_all();
                 let order_sender = crate::wvr_frame::build_wvr_frame(
-                    &self.glarea,
+                    &glarea,
                     &self.model.project_path,
                     &self.model.config,
                 )?;
@@ -662,10 +687,10 @@ impl Update for ConfigPanel {
 }
 
 impl Widget for ConfigPanel {
-    type Root = Paned;
+    type Root = gtk::Box;
 
     fn root(&self) -> Self::Root {
-        self.project_container.clone()
+        self.root.clone()
     }
 
     fn view(relm: &Relm<Self>, model: Self::Model) -> Self {
@@ -673,6 +698,11 @@ impl Widget for ConfigPanel {
         let mut render_stage_config_widget_list = HashMap::new();
 
         let model = model;
+
+        let root = gtk::Box::new(Vertical, 2);
+
+        let (control_container, final_stage_name_chooser) =
+            build_control_widget(relm, &model.config);
 
         let project_container = Paned::new(Horizontal);
 
@@ -708,25 +738,9 @@ impl Widget for ConfigPanel {
 
         render_stage_panel.add(&render_stage_config_list_container);
 
-        //tabs_container.append_page(&view_config_widget, Some(&Label::new(Some("General"))));
-        //tabs_container.append_page(&server_config_panel, Some(&Label::new(Some("Server"))));
         tabs_container.append_page(&input_list_panel, Some(&Label::new(Some("Inputs"))));
         tabs_container.append_page(&render_stage_panel, Some(&Label::new(Some("Layers"))));
 
-        /*
-        tabs_container
-            .get_tab_label(&view_config_widget)
-            .unwrap()
-            .set_tooltip_text(Some("Configure general parameters."));
-            */
-        /*
-        tabs_container
-            .get_tab_label(&server_config_panel)
-            .unwrap()
-            .set_tooltip_text(Some(
-                "/!\\ Not Implemented /!\\ \nConfigure wvr control server.",
-            ));
-             */
         tabs_container
             .get_tab_label(&input_list_panel)
             .unwrap()
@@ -740,31 +754,6 @@ impl Widget for ConfigPanel {
 
         let view_container = gtk::Box::new(Vertical, 8);
         view_container.set_property_margin(8);
-
-        let (control_container, final_stage_name_chooser) =
-            build_control_widget(relm, &model.config);
-
-        let glarea_wrapper = AspectFrame::new(None, 0.5, 0.0, 16.0 / 9.0, true);
-
-        glarea_wrapper.set_shadow_type(ShadowType::None);
-        glarea_wrapper.set_hexpand(true);
-        glarea_wrapper.set_vexpand(true);
-
-        let glarea = GLArea::new();
-
-        glarea.set_size_request(
-            model.config.view.width as i32 / 4,
-            model.config.view.height as i32 / 4,
-        );
-
-        glarea.set_required_version(3, 2);
-        glarea.set_hexpand(true);
-        glarea.set_vexpand(true);
-
-        glarea_wrapper.add(&glarea);
-
-        view_container.add(&control_container);
-        view_container.add(&glarea_wrapper);
 
         let view_config_wrapper = Expander::new(Some("View config"));
         view_config_wrapper.add(&view_config_panel);
@@ -785,14 +774,16 @@ impl Widget for ConfigPanel {
         project_container.pack1(&config_container, true, false);
         project_container.pack2(&misc_view_container, true, false);
 
-        project_container.show_all();
+        root.add(&control_container);
+        root.add(&project_container);
+        root.show_all();
 
         let created_render_stage_count = model.config.render_chain.len();
 
         Self {
             model,
 
-            project_container,
+            root,
 
             input_list_container,
 
@@ -805,7 +796,7 @@ impl Widget for ConfigPanel {
 
             final_stage_name_chooser,
 
-            glarea,
+            view_container,
 
             relm: relm.clone(),
         }
@@ -817,31 +808,26 @@ fn build_control_widget(
     config: &ProjectConfig,
 ) -> (gtk::Box, ComboBoxText) {
     let control_container = gtk::Box::new(Horizontal, 8);
+    control_container.set_property_margin(2);
 
-    let bpm_spin_button = SpinButton::new(
-        Some(&Adjustment::new(
-            config.bpm as f64,
-            0.0,
-            300.0,
-            0.01,
-            0.10,
-            1.0,
-        )),
-        1.0,
-        2,
-    );
-    //bpm_spin_button.set_has_frame(false);
+    let start_button = Button::new();
+    start_button.set_relief(ReliefStyle::None);
+    start_button.set_label(emoji::symbols::av_symbol::PLAY_BUTTON);
 
-    connect!(
-        relm,
-        bpm_spin_button,
-        connect_changed(val),
-        if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-            Some(ConfigPanelMsg::SetBpm(value))
+    let play_state = AtomicBool::new(false);
+    connect!(relm, start_button, connect_clicked(start_button), {
+        if play_state.load(Ordering::Relaxed) {
+            play_state.store(false, Ordering::Relaxed);
+            start_button.set_label(emoji::symbols::av_symbol::PLAY_BUTTON);
+            ConfigPanelMsg::PauseProject
         } else {
-            None
+            play_state.store(true, Ordering::Relaxed);
+            start_button.set_label(emoji::symbols::av_symbol::PAUSE_BUTTON);
+            ConfigPanelMsg::StartProject
         }
-    );
+    });
+
+    let resolution_wrapper = gtk::Box::new(Horizontal, 4);
 
     let width_spin_button = SpinButton::new(
         Some(&Adjustment::new(
@@ -893,6 +879,10 @@ fn build_control_widget(
         }
     );
 
+    resolution_wrapper.add(&width_spin_button);
+    resolution_wrapper.add(&Label::new(Some("x")));
+    resolution_wrapper.add(&height_spin_button);
+
     // Building the row allowing selection of the texture to render
     let input_name_store = gtk::ListStore::new(&[glib::Type::String, glib::Type::String]);
     for name in &get_input_choice_list(&config) {
@@ -902,7 +892,6 @@ fn build_control_widget(
     input_name_store.set_default_sort_func(&stage_config::list_store_sort_function);
 
     let final_stage_name_chooser = gtk::ComboBoxText::new();
-    final_stage_name_chooser.set_hexpand(true);
     final_stage_name_chooser.set_model(Some(&input_name_store));
 
     final_stage_name_chooser.set_id_column(0);
@@ -938,33 +927,45 @@ fn build_control_widget(
         );
     }
 
-    let start_button = Button::new();
-    start_button.set_relief(ReliefStyle::None);
-    start_button.set_label(emoji::symbols::av_symbol::PLAY_BUTTON);
+    let bpm_wrapper = gtk::Box::new(Horizontal, 4);
+    let bpm_spin_button = SpinButton::new(
+        Some(&Adjustment::new(
+            config.bpm as f64,
+            0.0,
+            300.0,
+            0.01,
+            0.10,
+            1.0,
+        )),
+        1.0,
+        2,
+    );
+    //bpm_spin_button.set_has_frame(false);
 
-    let play_state = AtomicBool::new(false);
-    connect!(relm, start_button, connect_clicked(start_button), {
-        if play_state.load(Ordering::Relaxed) {
-            play_state.store(false, Ordering::Relaxed);
-            start_button.set_label(emoji::symbols::av_symbol::PLAY_BUTTON);
-            ConfigPanelMsg::PauseProject
+    connect!(
+        relm,
+        bpm_spin_button,
+        connect_changed(val),
+        if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
+            Some(ConfigPanelMsg::SetBpm(value))
         } else {
-            play_state.store(true, Ordering::Relaxed);
-            start_button.set_label(emoji::symbols::av_symbol::PAUSE_BUTTON);
-            ConfigPanelMsg::StartProject
+            None
         }
-    });
+    );
+
+    bpm_wrapper.add(&bpm_spin_button);
+    bpm_wrapper.add(&Label::new(Some("BPM")));
 
     control_container.add(&start_button);
     control_container.add(&Separator::new(Vertical));
+
     control_container.add(&final_stage_name_chooser);
     control_container.add(&Separator::new(Vertical));
-    control_container.add(&bpm_spin_button);
-    control_container.add(&Label::new(Some("BPM")));
+
+    control_container.add(&resolution_wrapper);
     control_container.add(&Separator::new(Vertical));
-    control_container.add(&width_spin_button);
-    control_container.add(&Label::new(Some("x")));
-    control_container.add(&height_spin_button);
+
+    control_container.add(&bpm_wrapper);
 
     (control_container, final_stage_name_chooser)
 }
