@@ -17,7 +17,7 @@ pub fn create_project(project_config_path: &Path) -> Option<ProjectConfig> {
 
     let patterns_stage = RenderStageConfig {
         name: "Patterns".to_owned(),
-        filter: "dot_grid".to_owned(),
+        filter: "generate/dots".to_owned(),
         filter_mode_params: FilterMode::Rectangle(0.0, 0.0, 1.0, 1.0),
         inputs: HashMap::new(),
         variables: HashMap::new(),
@@ -32,7 +32,7 @@ pub fn create_project(project_config_path: &Path) -> Option<ProjectConfig> {
 
     let final_stage = RenderStageConfig {
         name: "FinalStage".to_owned(),
-        filter: "copy_input".to_owned(),
+        filter: "generic/copy".to_owned(),
         filter_mode_params: FilterMode::Rectangle(0.0, 0.0, 1.0, 1.0),
         inputs: final_stage_input_list,
         variables: HashMap::new(),

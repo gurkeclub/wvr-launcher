@@ -55,7 +55,7 @@ pub fn build_list_view(
     connect!(relm, add_render_stage_button, connect_clicked(_), {
         let mut layer_count = layer_count.lock().unwrap();
         let render_stage_name = format!("Layer #{:}", *layer_count);
-        let filter_name = "copy_input";
+        let filter_name = "generic/copy";
         let render_stage_config = RenderStageConfig {
             name: render_stage_name,
             filter: filter_name.to_string(),
