@@ -32,6 +32,9 @@ pub fn build_list_view(
     input_config_list: &HashMap<String, InputConfig>,
 ) -> (gtk::Box, gtk::Box) {
     let input_list_panel = gtk::Box::new(Vertical, 4);
+
+    input_list_panel.set_property_height_request(160);
+    input_list_panel.set_vexpand(true);
     input_list_panel.set_property_margin(8);
 
     let input_list_control_container = gtk::Box::new(Horizontal, 8);

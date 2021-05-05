@@ -278,6 +278,18 @@ impl Widget for MainWindow {
             .set_property("gtk-application-prefer-dark-theme", &model.dark_mode)
             .unwrap();
 
+        let provider = gtk::CssProvider::new();
+        // Load the CSS file
+        let style = include_bytes!("../res/style.css");
+        provider.load_from_data(style).expect("Failed to load CSS");
+        // We give the CssProvided to the default screen so the CSS rules we added
+        // can be applied to our window.
+        gtk::StyleContext::add_provider_for_screen(
+            &gdk::Screen::get_default().expect("Error initializing gtk css provider."),
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+
         let window = Window::new(WindowType::Toplevel);
         window.hide();
         window.set_title("wvr");

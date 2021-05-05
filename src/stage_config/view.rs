@@ -433,8 +433,6 @@ impl Widget for RenderStageConfigView {
         let root = gtk::Box::new(Vertical, 4);
         root.set_property_margin(8);
 
-        let base_config = gtk::Box::new(Horizontal, 8);
-
         // Building of the input name widget
         let name_entry = Entry::new();
         name_entry.set_hexpand(true);
@@ -449,10 +447,14 @@ impl Widget for RenderStageConfigView {
             ))
         );
 
+        let base_config = gtk::Grid::new();
+        base_config.set_row_spacing(4);
+        base_config.set_column_spacing(4);
+        base_config.set_orientation(Orientation::Vertical);
+
         // Building of the filter selection widget
         let filter_chooser_button =
             build_filter_chooser(relm, &model.available_filter_list, &model.config.filter);
-        filter_chooser_button.set_tooltip_text(Some("Used filter"));
 
         // Building of the precision selection widget
         let available_precisions = ["U8", "F16", "F32"];
@@ -532,13 +534,13 @@ impl Widget for RenderStageConfigView {
         filter_mode_params_popover.add(&filter_mode_params_wrapper);
         filter_mode_params_wrapper.show_all();
 
-        //base_config.attach(&name_label, 0, 0, 1, 1);
-        base_config.add(&name_entry);
+        base_config.attach(&Label::new(Some("Name")), 0, 0, 1, 1);
+        base_config.attach(&name_entry, 1, 0, 3, 1);
 
-        base_config.add(&filter_chooser_button);
-        base_config.add(&precision_chooser);
-
-        base_config.add(&filter_mode_params_button);
+        base_config.attach(&Label::new(Some("Filter")), 0, 1, 1, 1);
+        base_config.attach(&filter_chooser_button, 1, 1, 1, 1);
+        base_config.attach(&precision_chooser, 2, 1, 1, 1);
+        base_config.attach(&filter_mode_params_button, 3, 1, 1, 1);
 
         let (filter_config_container, filter_config_panel, input_widget_list) =
             build_filter_config(relm, &model);
@@ -684,7 +686,10 @@ pub fn build_filter_chooser(
     selected_filter: &str,
 ) -> MenuButton {
     let filter_chooser_label = Label::new(Some(selected_filter));
+    filter_chooser_label.set_xalign(0.0);
+
     let filter_chooser_button = MenuButton::new();
+    filter_chooser_button.set_hexpand(true);
     filter_chooser_button.add(&filter_chooser_label);
 
     let filter_chooser_popover = Popover::new(Some(&filter_chooser_button));
