@@ -1,0 +1,29 @@
+* {
+    min-height: unset;
+
+    
+    border-radius: 0;
+    -gtk-outline-radius: 0;
+    
+ }
+ 
+button {
+    min-width: unset;
+    min-height: unset;
+}
+
+button > label {
+    padding: 0; 
+}
+
+.combo {
+    padding: 0;
+}
+
+#control-bar > button {
+    padding: 0;
+}
+
+#glarea-wrapper {
+    background-color: #000; 
+}
