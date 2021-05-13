@@ -697,8 +697,10 @@ impl Widget for ConfigPanel {
             build_control_widget(relm, &model.config);
 
         let project_container = Paned::new(Horizontal);
+        project_container.set_wide_handle(true);
 
         let left_container = Paned::new(Vertical);
+        left_container.set_wide_handle(true);
 
         let view_config_panel = view_config::build_view(relm, &model.config.view);
 
@@ -720,8 +722,7 @@ impl Widget for ConfigPanel {
                 &mut render_stage_config_widget_list,
             );
 
-        let view_container = gtk::Box::new(Vertical, 8);
-        view_container.set_property_margin(8);
+        let view_container = gtk::Box::new(Vertical, 0);
 
         let glarea_wrapper = AspectFrame::new(None, 0.5, 0.5, 16.0 / 9.0, true);
 
@@ -732,18 +733,24 @@ impl Widget for ConfigPanel {
 
         let view_config_wrapper = Expander::new(Some("View config"));
         view_config_wrapper.add(&view_config_panel);
+        view_config_wrapper.activate();
 
         let server_config_wrapper = Expander::new(Some("Server config"));
         server_config_wrapper.add(&server_config_panel);
 
+        let general_config_panel = gtk::Box::new(Vertical, 8);
+        general_config_panel.set_property_margin(8);
+
+        general_config_panel.add(&control_container);
+        general_config_panel.add(&Separator::new(Horizontal));
+        general_config_panel.add(&view_config_wrapper);
+        general_config_panel.add(&server_config_wrapper);
+
         view_container.add(&glarea_wrapper);
-        view_container.add(&control_container);
-        view_container.add(&Separator::new(Horizontal));
-        view_container.add(&view_config_wrapper);
-        view_container.add(&server_config_wrapper);
+        view_container.add(&general_config_panel);
 
         left_container.pack1(&render_stage_config_list_container, true, false);
-        left_container.pack2(&input_list_panel, true, false);
+        left_container.pack2(&input_list_panel, false, false);
 
         project_container.pack1(&left_container, true, false);
         project_container.pack2(&view_container, true, false);
@@ -780,11 +787,9 @@ fn build_control_widget(
     relm: &Relm<ConfigPanel>,
     config: &ProjectConfig,
 ) -> (gtk::Box, ComboBoxText) {
-    let control_container = gtk::Box::new(Vertical, 4);
+    let control_container = gtk::Box::new(Horizontal, 4);
     control_container.set_widget_name("control-bar");
     control_container.set_property_margin(2);
-
-    let playback_row = gtk::Box::new(Horizontal, 8);
 
     let start_button = Button::new();
     start_button.set_relief(ReliefStyle::None);
@@ -847,67 +852,6 @@ fn build_control_widget(
             ))
         );
     }
-    playback_row.add(&final_stage_name_chooser);
-    playback_row.add(&start_button);
-
-    let parameter_row = gtk::Box::new(Horizontal, 8);
-
-    let resolution_wrapper = gtk::Box::new(Horizontal, 4);
-
-    let width_spin_button = SpinButton::new(
-        Some(&Adjustment::new(
-            config.view.width as f64,
-            0.0,
-            8192.0,
-            1.0,
-            10.0,
-            10.0,
-        )),
-        1.0,
-        0,
-    );
-    //width_spin_button.set_has_frame(false);
-
-    connect!(
-        relm,
-        width_spin_button,
-        connect_changed(val),
-        if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-            Some(ConfigPanelMsg::SetWidth(value as i64))
-        } else {
-            None
-        }
-    );
-
-    let height_spin_button = SpinButton::new(
-        Some(&Adjustment::new(
-            config.view.height as f64,
-            0.0,
-            8192.0,
-            1.0,
-            10.0,
-            10.0,
-        )),
-        1.0,
-        0,
-    );
-    //height_spin_button.set_has_frame(false);
-
-    connect!(
-        relm,
-        height_spin_button,
-        connect_changed(val),
-        if let Ok(value) = val.get_text().as_str().replace(',', ".").parse::<f64>() {
-            Some(ConfigPanelMsg::SetHeight(value as i64))
-        } else {
-            None
-        }
-    );
-
-    resolution_wrapper.add(&Label::new(Some("Resolution")));
-    resolution_wrapper.add(&width_spin_button);
-    resolution_wrapper.add(&Label::new(Some("x")));
-    resolution_wrapper.add(&height_spin_button);
 
     let bpm_wrapper = gtk::Box::new(Horizontal, 4);
     let bpm_spin_button = SpinButton::new(
@@ -938,14 +882,12 @@ fn build_control_widget(
     bpm_wrapper.add(&Label::new(Some("Bpm")));
     bpm_wrapper.add(&bpm_spin_button);
 
-    parameter_row.add(&bpm_wrapper);
-    parameter_row.add(&Separator::new(Vertical));
-
-    parameter_row.add(&resolution_wrapper);
-    parameter_row.add(&Separator::new(Vertical));
-
-    control_container.add(&playback_row);
-    control_container.add(&parameter_row);
+    control_container.add(&bpm_wrapper);
+    control_container.add(&Separator::new(Vertical));
+    control_container.add(&Label::new(Some("Final stage")));
+    control_container.add(&final_stage_name_chooser);
+    control_container.add(&Separator::new(Vertical));
+    control_container.add(&start_button);
 
     (control_container, final_stage_name_chooser)
 }

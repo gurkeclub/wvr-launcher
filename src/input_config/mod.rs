@@ -33,8 +33,6 @@ pub fn build_list_view(
 ) -> (gtk::Box, gtk::Box) {
     let input_list_panel = gtk::Box::new(Vertical, 4);
 
-    input_list_panel.set_property_height_request(160);
-    input_list_panel.set_vexpand(true);
     input_list_panel.set_property_margin(8);
 
     let input_list_control_container = gtk::Box::new(Horizontal, 8);
@@ -109,6 +107,7 @@ pub fn build_list_view(
     input_list_container_wrapper.set_policy(PolicyType::Never, PolicyType::Automatic);
     input_list_container_wrapper.set_hexpand(true);
     input_list_container_wrapper.set_vexpand(true);
+    input_list_container_wrapper.set_property_height_request(200);
     input_list_container_wrapper.add(&input_list_container);
 
     input_list_panel.add(&input_list_container_wrapper);

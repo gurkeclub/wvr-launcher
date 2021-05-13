@@ -30,7 +30,7 @@ pub fn build_view(relm: &Relm<ConfigPanel>, server_config: &ServerConfig) -> gtk
         Some(ConfigPanelMsg::SetServerIp(val.get_text().to_string()))
     );
 
-    ip_row.add(&Label::new(Some("Server binding IP: ")));
+    ip_row.add(&Label::new(Some("Server binding IP")));
     ip_row.add(&padding);
     ip_row.add(&ip_entry);
 
@@ -63,7 +63,7 @@ pub fn build_view(relm: &Relm<ConfigPanel>, server_config: &ServerConfig) -> gtk
         }
     );
 
-    port_row.add(&Label::new(Some("Listening port: ")));
+    port_row.add(&Label::new(Some("Listening port")));
     port_row.add(&padding);
     port_row.add(&width_spin_button);
 
@@ -82,7 +82,7 @@ pub fn build_view(relm: &Relm<ConfigPanel>, server_config: &ServerConfig) -> gtk
         Some(ConfigPanelMsg::SetServerEnabled(val.get_state()))
     );
 
-    enable_server_row.add(&Label::new(Some("Enable server: ")));
+    enable_server_row.add(&Label::new(Some("Enable server")));
     enable_server_row.add(&padding);
     enable_server_row.add(&enable_server_switch);
 

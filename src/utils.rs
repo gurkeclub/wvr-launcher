@@ -49,6 +49,7 @@ pub fn create_project(project_config_path: &Path) -> Option<ProjectConfig> {
             vsync: true,
             screenshot: false,
             screenshot_path: PathBuf::from("output/"),
+            screenshot_frame_count: -1,
             target_fps: 60.0,
             locked_speed: false,
         },
