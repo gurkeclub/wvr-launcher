@@ -118,8 +118,6 @@ pub fn build_list_view(
                 connect_page_reordered(_, widget, target_index),
                 {
                     if widget == &wrapper.clone().upcast::<gtk::Widget>() {
-                        println!("moved {:} to {:}", &id, &target_index);
-
                         Some(ConfigPanelMsg::MoveStage(id, target_index as usize))
                     } else {
                         None

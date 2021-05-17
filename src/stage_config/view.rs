@@ -698,25 +698,30 @@ pub fn build_filter_chooser(
     let filter_store = gtk::TreeStore::new(&[glib::Type::String, glib::Type::String]);
 
     let mut parents_iter = HashMap::new();
+    let mut parents_path = Vec::new();
 
-    //let root = filter_store.append(None);
+    let mut selected_filter_path = None;
+
     for name in available_filter_list.keys() {
         let mut parent_chain = String::new();
 
-        let filter_name = name.split('/').last().unwrap();
-        for sub_name in name.split('/') {
+        let filter_path_length = name.split('/').count();
+        for (depth, sub_name) in name.split('/').enumerate() {
             let sub_name = sub_name.to_owned();
 
-            if sub_name == filter_name {
-                if let Some(direct_parent) = parents_iter.get(&parent_chain) {
+            if depth + 1 == filter_path_length {
+                let filter_iter = if let Some(direct_parent) = parents_iter.get(&parent_chain) {
                     filter_store.insert_with_values(
                         Some(direct_parent),
                         None,
                         &[0, 1],
                         &[&sub_name, name],
-                    );
+                    )
                 } else {
-                    filter_store.insert_with_values(None, None, &[0, 1], &[&sub_name, name]);
+                    filter_store.insert_with_values(None, None, &[0, 1], &[&sub_name, name])
+                };
+                if selected_filter_path.is_none() || name == selected_filter {
+                    selected_filter_path = filter_store.get_path(&filter_iter);
                 }
             } else {
                 let old_parent_chain = parent_chain.clone();
@@ -734,9 +739,10 @@ pub fn build_filter_chooser(
                             filter_store.append(None)
                         };
 
-                    filter_store.set_value(&sub_name_iter, 0, &sub_name.to_value());
+                    filter_store.set_value(&sub_name_iter, 0, &parent_chain.to_value());
 
-                    parents_iter.insert(sub_name.clone(), sub_name_iter);
+                    parents_path.push(filter_store.get_path(&sub_name_iter).unwrap());
+                    parents_iter.insert(parent_chain.clone(), sub_name_iter);
                 }
             }
         }
@@ -744,9 +750,11 @@ pub fn build_filter_chooser(
     filter_store.set_sort_column_id(SortColumn::Index(0), SortType::Ascending);
 
     let filter_chooser = gtk::TreeView::new();
-
     filter_chooser.set_hexpand(true);
     filter_chooser.set_model(Some(&filter_store));
+    if let Some(selected_filter_path) = selected_filter_path {
+        filter_chooser.set_cursor::<TreeViewColumn>(&selected_filter_path, None, false);
+    }
 
     let column = TreeViewColumn::new();
     let cell = CellRendererText::new();
@@ -778,6 +786,11 @@ pub fn build_filter_chooser(
             None
         }
     });
+
+    let filter_chooser_selection = filter_chooser.get_selection();
+    filter_chooser_selection.set_select_function(Some(Box::new(move |_, _, path, _| {
+        !parents_path.contains(path)
+    })));
 
     filter_chooser_button
 }

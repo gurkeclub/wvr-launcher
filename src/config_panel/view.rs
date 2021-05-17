@@ -412,6 +412,23 @@ impl Update for ConfigPanel {
                     .append_page(&wrapper, Some(&page_label_container));
                 self.render_stage_config_list_container
                     .set_tab_reorderable(&wrapper, true);
+                self.render_stage_config_list_container
+                    .set_tab_reorderable(&wrapper, true);
+                {
+                    let wrapper = wrapper.clone();
+                    connect!(
+                        self.relm,
+                        self.render_stage_config_list_container,
+                        connect_page_reordered(_, widget, target_index),
+                        {
+                            if widget == &wrapper.clone().upcast::<gtk::Widget>() {
+                                Some(ConfigPanelMsg::MoveStage(id, target_index as usize))
+                            } else {
+                                None
+                            }
+                        }
+                    );
+                }
 
                 page_label_container.show_all();
                 wrapper.show_all();
