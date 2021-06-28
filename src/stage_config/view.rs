@@ -16,7 +16,7 @@ use gtk::{
     TreeModelExt, TreeSelectionExt, TreeStoreExt, TreeViewColumn, TreeViewExt, WidgetExt,
 };
 
-use relm::{connect, Relm, Update, Widget};
+use relm::{connect, Component, Relm, Update, Widget};
 use relm_derive::Msg;
 
 use strsim::levenshtein;
@@ -29,7 +29,7 @@ use wvr_data::{DataHolder, DataRange};
 use crate::config_panel::msg::ConfigPanelMsg;
 use crate::config_panel::view::ConfigPanel;
 
-use super::automation;
+use super::automation::{self, AutomationView};
 use super::input;
 use super::variable;
 
@@ -65,6 +65,7 @@ pub struct RenderStageConfigView {
 
     filter_config_container: Grid,
     input_widget_list: HashMap<String, (ComboBoxText, ComboBoxText)>,
+    automation_button_list: Vec<Component<AutomationView>>,
 }
 
 impl RenderStageConfigView {
@@ -258,11 +259,20 @@ impl RenderStageConfigView {
                     value_range,
                 );
 
-                let automation_wrapper = automation::build_automation_row(
-                    &self.relm,
-                    &variable_name,
-                    &variable_automation,
-                    &value_range,
+                let variable_dimension_count: usize = match default_value.0 {
+                    DataHolder::Float(_) | DataHolder::Int(_) | DataHolder::Bool(_) => 1,
+                    DataHolder::Float2(_) | DataHolder::Int2(_) => 2,
+                    DataHolder::Float3(_) | DataHolder::Int3(_) => 3,
+                    DataHolder::Float4(_) | DataHolder::Int4(_) => 4,
+                    _ => 1,
+                };
+
+                let (automation_button, automation_wrapper) = automation::build_automation_selector(
+                    self.relm.clone(),
+                    variable_name.clone(),
+                    variable_dimension_count,
+                    value_range.clone(),
+                    variable_automation.clone(),
                 );
 
                 self.filter_config_container.attach(
@@ -291,6 +301,8 @@ impl RenderStageConfigView {
                     variable_name.clone(),
                     (variable_value.clone(), *variable_automation),
                 );
+
+                self.automation_button_list.push(automation_button);
             }
 
             self.filter_config_container.show_all();
@@ -407,6 +419,7 @@ impl Update for RenderStageConfigView {
                 }
             }
             RenderStageConfigViewMsg::UpdateVariableAutomation(name, automation) => {
+                println!("{:} : {:?}", name, automation);
                 self.model.parent_relm.stream().emit(
                     ConfigPanelMsg::UpdateRenderStageVariableAutomation(
                         self.model.id,
@@ -542,8 +555,12 @@ impl Widget for RenderStageConfigView {
         base_config.attach(&precision_chooser, 2, 1, 1, 1);
         base_config.attach(&filter_mode_params_button, 3, 1, 1, 1);
 
-        let (filter_config_container, filter_config_panel, input_widget_list) =
-            build_filter_config(relm, &model);
+        let (
+            filter_config_container,
+            filter_config_panel,
+            input_widget_list,
+            automation_button_list,
+        ) = build_filter_config(relm, &model);
 
         root.add(&base_config);
         root.add(&Separator::new(Horizontal));
@@ -559,6 +576,8 @@ impl Widget for RenderStageConfigView {
 
             filter_config_container,
             input_widget_list,
+
+            automation_button_list,
         }
     }
 }
@@ -570,8 +589,10 @@ pub fn build_filter_config(
     Grid,
     ScrolledWindow,
     HashMap<String, (ComboBoxText, ComboBoxText)>,
+    Vec<Component<AutomationView>>,
 ) {
     let mut input_widget_list = HashMap::new();
+    let mut automation_button_list = Vec::new();
 
     let filter_config_panel = gtk::Box::new(Vertical, 16);
     let filter_config_container = gtk::Grid::new();
@@ -628,11 +649,20 @@ pub fn build_filter_config(
             let variable_wrapper =
                 variable::build_variable_row(relm, &variable_name, &variable_value, &value_range);
 
-            let automation_wrapper = automation::build_automation_row(
-                relm,
-                &variable_name,
-                &variable_automation,
-                &value_range,
+            let variable_dimension_count: usize = match default_value.0 {
+                DataHolder::Float(_) | DataHolder::Int(_) | DataHolder::Bool(_) => 1,
+                DataHolder::Float2(_) | DataHolder::Int2(_) => 2,
+                DataHolder::Float3(_) | DataHolder::Int3(_) => 3,
+                DataHolder::Float4(_) | DataHolder::Int4(_) => 4,
+                _ => 1,
+            };
+
+            let (automation_button, automation_wrapper) = automation::build_automation_selector(
+                relm.clone(),
+                variable_name.clone(),
+                variable_dimension_count,
+                value_range.clone(),
+                variable_automation.clone(),
             );
 
             let variable_name_label = Label::new(Some(variable_name));
@@ -661,6 +691,8 @@ pub fn build_filter_config(
                 1,
                 1,
             );
+
+            automation_button_list.push(automation_button);
         }
     }
 
@@ -677,6 +709,7 @@ pub fn build_filter_config(
         filter_config_container,
         filter_config_wrapper,
         input_widget_list,
+        automation_button_list,
     )
 }
 
@@ -720,6 +753,7 @@ pub fn build_filter_chooser(
                 } else {
                     filter_store.insert_with_values(None, None, &[0, 1], &[&sub_name, name])
                 };
+
                 if selected_filter_path.is_none() || name == selected_filter {
                     selected_filter_path = filter_store.get_path(&filter_iter);
                 }
